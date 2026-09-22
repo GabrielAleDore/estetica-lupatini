@@ -1,0 +1,100 @@
+name: Build e Distribuição Multiplataforma (APK, Windows, Web)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  # 1. Build do Web Release
+  build-web:
+    name: Build Web Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.2'
+          channel: 'stable'
+      - name: Instalar dependências
+        run: |
+          cd frontend
+          flutter pub get
+      - name: Analisar código
+        run: |
+          cd frontend
+          flutter analyze
+      - name: Compilar Web Release
+        run: |
+          cd frontend
+          flutter build web --release --base-href /
+      - name: Publicar Artefato Web
+        uses: actions/upload-artifact@v4
+        with:
+          name: estetica-lupatini-web
+          path: frontend/build/web/
+
+  # 2. Build do Android APK
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.2'
+          channel: 'stable'
+      - name: Instalar dependências
+        run: |
+          cd frontend
+          flutter pub get
+      - name: Compilar APK Release
+        run: |
+          cd frontend
+          flutter build apk --release
+      - name: Compilar APKs Split por ABI
+        run: |
+          cd frontend
+          flutter build apk --release --split-per-abi
+      - name: Publicar Artefatos APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: estetica-lupatini-android-apk
+          path: frontend/build/app/outputs/flutter-apk/*.apk
+
+  # 3. Build do Windows Desktop e Instalador Inno Setup
+  build-windows:
+    name: Build Windows Desktop & Instalador
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.2'
+          channel: 'stable'
+      - name: Instalar dependências
+        run: |
+          cd frontend
+          flutter pub get
+      - name: Compilar Windows Release
+        run: |
+          cd frontend
+          flutter build windows --release
+      - name: Instalar Inno Setup
+        run: choco install innosetup -y
+      - name: Gerar Instalador Executável
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" scripts\windows_installer.iss
+      - name: Publicar Instalador e Binários Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: estetica-lupatini-windows-installer
+          path: |
+            dist/Estetica_Lupatini_Setup.exe
+            frontend/build/windows/x64/runner/Release/

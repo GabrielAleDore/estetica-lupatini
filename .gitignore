@@ -1,0 +1,57 @@
+# Flutter & Dart Build and Cache
+build/
+**/build/
+.dart_tool/
+**/.dart_tool/
+.packages
+**/.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+**/.flutter-plugins*
+.pub-cache/
+**/.pub-cache/
+.pub/
+**/.pub/
+coverage/
+**/coverage/
+**/doc/api/
+
+# Environment Variables & Secrets
+.env
+*.env
+.env.*
+*.pem
+*.key
+*.p12
+
+# IDE & Editor files
+.idea/
+**/.idea/
+.vscode/
+**/.vscode/
+*.iml
+**/*.iml
+*.ipr
+*.iws
+
+# Operating System Files
+.DS_Store
+**/.DS_Store
+Thumbs.db
+**/Thumbs.db
+desktop.ini
+**/desktop.ini
+
+# Firebase & Deployment Caches
+.firebase/
+**/.firebase/
+
+# Logs & Temporary Files
+*.log
+**/*.log
+*.class
+*.pyc
+__pycache__/
+**/__pycache__/
+node_modules/
+**/node_modules/
