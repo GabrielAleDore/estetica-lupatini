@@ -72,3 +72,6 @@ BEGIN
             ('Inter PF Pessoal Sócia', 'Banco Inter', '0001', '554433-2', 'CORRENTE', 'PF', 'mariana.lupatini@email.com', 2500.00, 2500.00, '#FF7A00', true);
     END IF;
 END $$;
+
+-- 6. RECARREGAMENTO DO CACHE DO POSTGREST
+NOTIFY pgrst, 'reload schema';

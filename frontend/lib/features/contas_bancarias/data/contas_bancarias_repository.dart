@@ -73,7 +73,6 @@ class ContasBancariasRepository {
     try {
       await _supabase.from('contas_bancarias').update({
         'ativo': ativo,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', id);
     } catch (e) {
       throw Exception('Erro ao alterar status da conta bancária: $e');

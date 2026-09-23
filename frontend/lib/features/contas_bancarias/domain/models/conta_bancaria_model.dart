@@ -115,7 +115,6 @@ class ContaBancariaModel extends Equatable {
       'saldo_atual': saldoAtual,
       'cor_identificadora': corIdentificadora ?? '#8D5B4C',
       'ativo': ativo,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
   }
 
