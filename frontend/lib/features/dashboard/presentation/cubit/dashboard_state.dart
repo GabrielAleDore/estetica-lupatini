@@ -15,6 +15,15 @@ class DashboardState extends Equatable {
   final double balancoLiquido;
   final double vendasEfetivadas;
   final double vendasAReceber;
+
+  // Indicadores de Contas Bancárias (Liquidez Imediata)
+  final double saldoTotalPJ;
+  final double saldoTotalPF;
+  final double saldoTotalGeral;
+  final int qtdContasPJ;
+  final int qtdContasPF;
+  final List<Map<String, dynamic>> contasBancarias;
+
   final String? errorMessage;
   final String? successMessage;
 
@@ -31,6 +40,12 @@ class DashboardState extends Equatable {
     this.balancoLiquido = 0.0,
     this.vendasEfetivadas = 0.0,
     this.vendasAReceber = 0.0,
+    this.saldoTotalPJ = 0.0,
+    this.saldoTotalPF = 0.0,
+    this.saldoTotalGeral = 0.0,
+    this.qtdContasPJ = 0,
+    this.qtdContasPF = 0,
+    this.contasBancarias = const [],
     this.errorMessage,
     this.successMessage,
   });
@@ -48,6 +63,12 @@ class DashboardState extends Equatable {
     double? balancoLiquido,
     double? vendasEfetivadas,
     double? vendasAReceber,
+    double? saldoTotalPJ,
+    double? saldoTotalPF,
+    double? saldoTotalGeral,
+    int? qtdContasPJ,
+    int? qtdContasPF,
+    List<Map<String, dynamic>>? contasBancarias,
     String? errorMessage,
     String? successMessage,
   }) {
@@ -64,6 +85,12 @@ class DashboardState extends Equatable {
       balancoLiquido: balancoLiquido ?? this.balancoLiquido,
       vendasEfetivadas: vendasEfetivadas ?? this.vendasEfetivadas,
       vendasAReceber: vendasAReceber ?? this.vendasAReceber,
+      saldoTotalPJ: saldoTotalPJ ?? this.saldoTotalPJ,
+      saldoTotalPF: saldoTotalPF ?? this.saldoTotalPF,
+      saldoTotalGeral: saldoTotalGeral ?? this.saldoTotalGeral,
+      qtdContasPJ: qtdContasPJ ?? this.qtdContasPJ,
+      qtdContasPF: qtdContasPF ?? this.qtdContasPF,
+      contasBancarias: contasBancarias ?? this.contasBancarias,
       errorMessage: errorMessage,
       successMessage: successMessage,
     );
@@ -83,6 +110,12 @@ class DashboardState extends Equatable {
         balancoLiquido,
         vendasEfetivadas,
         vendasAReceber,
+        saldoTotalPJ,
+        saldoTotalPF,
+        saldoTotalGeral,
+        qtdContasPJ,
+        qtdContasPF,
+        contasBancarias,
         errorMessage,
         successMessage,
       ];

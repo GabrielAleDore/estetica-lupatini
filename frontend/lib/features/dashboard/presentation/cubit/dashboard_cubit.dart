@@ -14,8 +14,14 @@ class DashboardCubit extends Cubit<DashboardState> {
     emit(state.copyWith(status: DashboardStatus.loading, mesReferencia: mesConsulta));
 
     try {
-      // 1. Chamada de alta performance à query agregada única no backend
-      final resumo = await _repository.obterDashboardResumo(mesConsulta);
+      // 1. Chamada concorrente: resumo gerencial agregado + saldos das contas bancárias
+      final results = await Future.wait([
+        _repository.obterDashboardResumo(mesConsulta),
+        _repository.obterResumoContasBancarias(),
+      ]);
+
+      final resumo = results[0];
+      final resumoBancario = results[1];
 
       final dre = resumo['dre'] as Map<String, dynamic>? ?? {};
       final alertas = (resumo['alertas_estoque'] as List?)?.cast<Map<String, dynamic>>() ?? [];
@@ -25,6 +31,14 @@ class DashboardCubit extends Cubit<DashboardState> {
       final balanco = double.tryParse(resumo['balanco_liquido']?.toString() ?? '0') ?? 0.0;
       final vendasEfetivadas = double.tryParse(resumo['vendas_efetivadas']?.toString() ?? '0') ?? 0.0;
       final vendasAReceber = double.tryParse(resumo['vendas_a_receber']?.toString() ?? '0') ?? 0.0;
+
+      // Dados de liquidez bancária
+      final saldoPJ = double.tryParse(resumoBancario['saldo_total_pj']?.toString() ?? '0') ?? 0.0;
+      final saldoPF = double.tryParse(resumoBancario['saldo_total_pf']?.toString() ?? '0') ?? 0.0;
+      final saldoGeral = double.tryParse(resumoBancario['saldo_total_geral']?.toString() ?? '0') ?? (saldoPJ + saldoPF);
+      final qtdPJ = resumoBancario['qtd_contas_pj'] as int? ?? 0;
+      final qtdPF = resumoBancario['qtd_contas_pf'] as int? ?? 0;
+      final contasBancarias = (resumoBancario['contas'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
       emit(state.copyWith(
         status: DashboardStatus.loaded,
@@ -37,6 +51,12 @@ class DashboardCubit extends Cubit<DashboardState> {
         balancoLiquido: balanco,
         vendasEfetivadas: vendasEfetivadas,
         vendasAReceber: vendasAReceber,
+        saldoTotalPJ: saldoPJ,
+        saldoTotalPF: saldoPF,
+        saldoTotalGeral: saldoGeral,
+        qtdContasPJ: qtdPJ,
+        qtdContasPF: qtdPF,
+        contasBancarias: contasBancarias,
         mesReferencia: mesConsulta,
       ));
 
@@ -51,12 +71,32 @@ class DashboardCubit extends Cubit<DashboardState> {
     } catch (e) {
       // Fallback gracioso caso endpoint agregado encontre erro
       try {
-        final dre = await _repository.obterDRE(mesConsulta);
-        final alertas = await _repository.listarAlertasEstoque();
+        final resultsFallback = await Future.wait([
+          _repository.obterDRE(mesConsulta),
+          _repository.listarAlertasEstoque(),
+          _repository.obterResumoContasBancarias(),
+        ]);
+        final dre = resultsFallback[0] as Map<String, dynamic>;
+        final alertas = resultsFallback[1] as List<Map<String, dynamic>>;
+        final resumoBancario = resultsFallback[2] as Map<String, dynamic>;
+
+        final saldoPJ = double.tryParse(resumoBancario['saldo_total_pj']?.toString() ?? '0') ?? 0.0;
+        final saldoPF = double.tryParse(resumoBancario['saldo_total_pf']?.toString() ?? '0') ?? 0.0;
+        final saldoGeral = double.tryParse(resumoBancario['saldo_total_geral']?.toString() ?? '0') ?? (saldoPJ + saldoPF);
+        final qtdPJ = resumoBancario['qtd_contas_pj'] as int? ?? 0;
+        final qtdPF = resumoBancario['qtd_contas_pf'] as int? ?? 0;
+        final contasBancarias = (resumoBancario['contas'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
         emit(state.copyWith(
           status: DashboardStatus.loaded,
           dre: dre,
           alertasEstoque: alertas,
+          saldoTotalPJ: saldoPJ,
+          saldoTotalPF: saldoPF,
+          saldoTotalGeral: saldoGeral,
+          qtdContasPJ: qtdPJ,
+          qtdContasPF: qtdPF,
+          contasBancarias: contasBancarias,
           mesReferencia: mesConsulta,
         ));
       } catch (errFallback) {

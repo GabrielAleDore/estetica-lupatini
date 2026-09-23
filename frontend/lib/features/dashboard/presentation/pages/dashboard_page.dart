@@ -7,6 +7,8 @@ import '../cubit/dashboard_state.dart';
 import '../widgets/entrada_estoque_dialog.dart';
 import '../widgets/lancamento_avulso_dialog.dart';
 import '../../services/relatorio_dre_pdf_service.dart';
+import '../../../shell/main_navigation_shell.dart';
+import '../../../contas_bancarias/presentation/pages/contas_bancarias_page.dart';
 
 class DashboardPage extends StatelessWidget {
   final DashboardCubit? cubit;
@@ -67,6 +69,16 @@ class _DashboardView extends StatelessWidget {
       context: context,
       builder: (_) => _GerarDreDialog(mesReferenciaInicial: mesReferenciaAtual),
     );
+  }
+
+  void _navegarParaContasBancarias(BuildContext context) {
+    try {
+      MainNavigationShell.navegarPara('Contas Bancárias');
+    } catch (_) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const ContasBancariasPage()),
+      );
+    }
   }
 
   String _ajustarMes(String mesAtual, int delta) {
@@ -229,6 +241,18 @@ class _DashboardView extends StatelessWidget {
                       ],
                     ),
                   ],
+                ),
+                const SizedBox(height: 24),
+
+                // 1. Bloco de Liquidez Financeira Imediata (Contas Bancárias PJ e PF)
+                _BankLiquidityBlock(
+                  saldoTotalPJ: state.saldoTotalPJ,
+                  saldoTotalPF: state.saldoTotalPF,
+                  saldoTotalGeral: state.saldoTotalGeral,
+                  qtdContasPJ: state.qtdContasPJ,
+                  qtdContasPF: state.qtdContasPF,
+                  saldoOperacionalMes: lucroOperacionalPj,
+                  onGerenciarContas: () => _navegarParaContasBancarias(context),
                 ),
                 const SizedBox(height: 24),
 
@@ -676,6 +700,368 @@ class _HighlightCard extends StatelessWidget {
   }
 }
 
+// =====================================================================
+// BLOCO DE LIQUIDEZ FINANCEIRA IMEDIATA (CONTAS BANCÁRIAS PJ E PF)
+// =====================================================================
+
+class _BankLiquidityBlock extends StatelessWidget {
+  final double saldoTotalPJ;
+  final double saldoTotalPF;
+  final double saldoTotalGeral;
+  final int qtdContasPJ;
+  final int qtdContasPF;
+  final double saldoOperacionalMes;
+  final VoidCallback onGerenciarContas;
+
+  const _BankLiquidityBlock({
+    required this.saldoTotalPJ,
+    required this.saldoTotalPF,
+    required this.saldoTotalGeral,
+    required this.qtdContasPJ,
+    required this.qtdContasPF,
+    required this.saldoOperacionalMes,
+    required this.onGerenciarContas,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final currencyFormat = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderLight),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Cabeçalho do Bloco com Segregação e Ação Rápida
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.account_balance_outlined,
+                  color: AppColors.primary,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Liquidez Financeira Imediata • Contas Bancárias',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimaryLight,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Disponibilidade em tempo real com segregação entre Clínica (PJ) e Sócios (PF)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondaryLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: onGerenciarContas,
+                icon: const Icon(Icons.open_in_new, size: 16),
+                label: const Text('VER CONTAS BANCÁRIAS'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+
+          // 3 Cards Responsivos
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isDesktop = constraints.maxWidth > 950;
+              final isTablet = constraints.maxWidth > 650;
+
+              final cardPj = _BankLiquidityCard(
+                badgeLabel: 'PJ • CLÍNICA',
+                badgeColor: AppColors.pjClinical,
+                badgeTextColor: Colors.white,
+                title: 'Saldo Disponível Clínica (PJ)',
+                value: currencyFormat.format(saldoTotalPJ),
+                subtitle: qtdContasPJ == 0
+                    ? 'Nenhuma conta PJ ativa'
+                    : '$qtdContasPJ ${qtdContasPJ == 1 ? "conta operacional ativa" : "contas operacionais ativas"}',
+                description: 'Recursos para custeio, insumos e operação clínica',
+                icon: Icons.business_center_rounded,
+                accentColor: AppColors.pjClinical,
+                accentBg: const Color(0xFFF7ECE8),
+                onTap: onGerenciarContas,
+              );
+
+              final cardPf = _BankLiquidityCard(
+                badgeLabel: 'PF • SÓCIOS',
+                badgeColor: const Color(0xFFB07D4F),
+                badgeTextColor: Colors.white,
+                title: 'Saldo Pessoal / Sócios (PF)',
+                value: currencyFormat.format(saldoTotalPF),
+                subtitle: qtdContasPF == 0
+                    ? 'Nenhuma conta PF ativa'
+                    : '$qtdContasPF ${qtdContasPF == 1 ? "conta pessoal ativa" : "contas pessoais ativas"}',
+                description: 'Patrimônio segregado dos sócios (PF)',
+                icon: Icons.person_pin_rounded,
+                accentColor: const Color(0xFFB07D4F),
+                accentBg: const Color(0xFFFAF3EC),
+                onTap: onGerenciarContas,
+              );
+
+              final cardTotal = _BankLiquidityCard(
+                badgeLabel: 'PATRIMÔNIO LÍQUIDO BANCÁRIO',
+                badgeColor: const Color(0xFF1B5E20),
+                badgeTextColor: Colors.white,
+                title: 'Patrimônio Líquido (Total)',
+                value: currencyFormat.format(saldoTotalGeral),
+                subtitle: '${qtdContasPJ + qtdContasPF} contas bancárias ativas',
+                description: 'Saldo Operacional Mês: ${currencyFormat.format(saldoOperacionalMes)}',
+                icon: Icons.account_balance_wallet_rounded,
+                accentColor: const Color(0xFF2E7D32),
+                accentBg: const Color(0xFFE8F5E9),
+                isHighlighted: true,
+                onTap: onGerenciarContas,
+              );
+
+              if (isDesktop) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: cardPj),
+                    const SizedBox(width: 14),
+                    Expanded(child: cardPf),
+                    const SizedBox(width: 14),
+                    Expanded(child: cardTotal),
+                  ],
+                );
+              }
+
+              if (isTablet) {
+                return Column(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: cardPj),
+                        const SizedBox(width: 14),
+                        Expanded(child: cardPf),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    cardTotal,
+                  ],
+                );
+              }
+
+              return Column(
+                children: [
+                  cardPj,
+                  const SizedBox(height: 12),
+                  cardPf,
+                  const SizedBox(height: 12),
+                  cardTotal,
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BankLiquidityCard extends StatelessWidget {
+  final String badgeLabel;
+  final Color badgeColor;
+  final Color badgeTextColor;
+  final String title;
+  final String value;
+  final String subtitle;
+  final String description;
+  final IconData icon;
+  final Color accentColor;
+  final Color accentBg;
+  final bool isHighlighted;
+  final VoidCallback onTap;
+
+  const _BankLiquidityCard({
+    required this.badgeLabel,
+    required this.badgeColor,
+    required this.badgeTextColor,
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.description,
+    required this.icon,
+    required this.accentColor,
+    required this.accentBg,
+    this.isHighlighted = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isHighlighted
+                ? accentColor.withValues(alpha: 0.5)
+                : accentColor.withValues(alpha: 0.25),
+            width: isHighlighted ? 1.8 : 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: accentColor.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Row: Badge + Icon
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: badgeColor,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    badgeLabel,
+                    style: TextStyle(
+                      color: badgeTextColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: accentBg,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: accentColor, size: 20),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // Título
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondaryLight,
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // Valor R$
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: accentColor,
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // Subtítulo (contas ativas)
+            Row(
+              children: [
+                Icon(Icons.check_circle_outline, size: 13, color: accentColor),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: accentColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 16),
+
+            // Detalhe / Descrição
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondaryLight,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  size: 16,
+                  color: accentColor.withValues(alpha: 0.7),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _DRELineItem extends StatelessWidget {
   final String label;
@@ -791,6 +1177,54 @@ class _DashboardSkeletonLoadingState extends State<_DashboardSkeletonLoading>
                       ],
                     ),
                   ],
+                ),
+                const SizedBox(height: 24),
+
+                // Bank Liquidity Skeleton Block
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.borderLight),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildShimmerBox(width: 260, height: 20, radius: 6),
+                          _buildShimmerBox(width: 160, height: 32, radius: 8),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isWide = constraints.maxWidth > 950;
+                          return isWide
+                              ? Row(
+                                  children: [
+                                    Expanded(child: _buildShimmerBox(width: double.infinity, height: 150, radius: 14)),
+                                    const SizedBox(width: 14),
+                                    Expanded(child: _buildShimmerBox(width: double.infinity, height: 150, radius: 14)),
+                                    const SizedBox(width: 14),
+                                    Expanded(child: _buildShimmerBox(width: double.infinity, height: 150, radius: 14)),
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    _buildShimmerBox(width: double.infinity, height: 130, radius: 14),
+                                    const SizedBox(height: 12),
+                                    _buildShimmerBox(width: double.infinity, height: 130, radius: 14),
+                                    const SizedBox(height: 12),
+                                    _buildShimmerBox(width: double.infinity, height: 130, radius: 14),
+                                  ],
+                                );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 24),
 

@@ -235,6 +235,17 @@ class FakeDashboardRepository implements DashboardRepository {
   };
 
   @override
+  Future<Map<String, dynamic>> obterResumoContasBancarias() async => {
+    'saldo_total_pj': 10000.0,
+    'saldo_total_pf': 5000.0,
+    'saldo_total_geral': 15000.0,
+    'qtd_contas_pj': 2,
+    'qtd_contas_pf': 1,
+    'total_contas_ativas': 3,
+    'contas': [],
+  };
+
+  @override
   Future<List<Map<String, dynamic>>> listarAlertasEstoque() async => [];
 
   @override
@@ -458,6 +469,13 @@ void main() {
       ),
     );
     await tester.pump();
+
+    // Valida bloco de liquidez bancária
+    expect(find.text('Liquidez Financeira Imediata • Contas Bancárias'), findsOneWidget);
+    expect(find.text('Saldo Disponível Clínica (PJ)'), findsOneWidget);
+    expect(find.text('Saldo Pessoal / Sócios (PF)'), findsOneWidget);
+    expect(find.text('Patrimônio Líquido (Total)'), findsOneWidget);
+    expect(find.text('VER CONTAS BANCÁRIAS'), findsOneWidget);
 
     expect(find.text('ENTRADA DE ESTOQUE'), findsOneWidget);
     expect(find.text('NOVO GASTO AVULSO'), findsOneWidget);

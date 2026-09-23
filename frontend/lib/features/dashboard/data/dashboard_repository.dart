@@ -7,6 +7,55 @@ class DashboardRepository {
   DashboardRepository({SupabaseClient? client})
       : _supabase = client ?? SupabaseService.client;
 
+  /// Obtém o saldo consolidado e contagem das contas bancárias ativas (PJ e PF)
+  Future<Map<String, dynamic>> obterResumoContasBancarias() async {
+    try {
+      final res = await _supabase
+          .from('contas_bancarias')
+          .select('id, nome_conta, banco_nome, tipo_conta, escopo, saldo_atual, ativo')
+          .eq('ativo', true);
+
+      final list = List<Map<String, dynamic>>.from(res as List);
+      double saldoPj = 0.0;
+      double saldoPf = 0.0;
+      int qtdPj = 0;
+      int qtdPf = 0;
+
+      for (final item in list) {
+        final saldo = (item['saldo_atual'] as num?)?.toDouble() ?? 0.0;
+        final escopo = (item['escopo'] as String? ?? 'PJ').toUpperCase();
+        if (escopo == 'PF') {
+          saldoPf += saldo;
+          qtdPf++;
+        } else {
+          saldoPj += saldo;
+          qtdPj++;
+        }
+      }
+
+      return {
+        'saldo_total_pj': saldoPj,
+        'saldo_total_pf': saldoPf,
+        'saldo_total_geral': saldoPj + saldoPf,
+        'qtd_contas_pj': qtdPj,
+        'qtd_contas_pf': qtdPf,
+        'total_contas_ativas': list.length,
+        'contas': list,
+      };
+    } catch (_) {
+      // Fallback defensivo para não quebrar o dashboard caso a tabela ainda não esteja provisionada
+      return {
+        'saldo_total_pj': 0.0,
+        'saldo_total_pf': 0.0,
+        'saldo_total_geral': 0.0,
+        'qtd_contas_pj': 0,
+        'qtd_contas_pf': 0,
+        'total_contas_ativas': 0,
+        'contas': <Map<String, dynamic>>[],
+      };
+    }
+  }
+
   Future<Map<String, dynamic>> obterDashboardResumo(String mes) async {
     try {
       // Executa a Stored Procedure agregada de alta performance do PostgreSQL
