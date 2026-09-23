@@ -47,7 +47,19 @@ class ContasPagarRepository {
         payload['data_pagamento'] = DateTime.now().toIso8601String().substring(0, 10);
       }
 
-      final res = await _supabase.from('transacoes_financeiras').insert(payload).select().single();
+      Map<String, dynamic> res;
+      try {
+        res = await _supabase.from('transacoes_financeiras').insert(payload).select().single();
+      } catch (insertErr) {
+        final errText = insertErr.toString();
+        if (errText.contains('PGRST204') || errText.contains('conta_bancaria_id')) {
+          final fallbackPayload = Map<String, dynamic>.from(payload);
+          fallbackPayload.remove('conta_bancaria_id');
+          res = await _supabase.from('transacoes_financeiras').insert(fallbackPayload).select().single();
+        } else {
+          rethrow;
+        }
+      }
       return Map<String, dynamic>.from(res);
     } catch (e) {
       throw Exception('Erro ao cadastrar despesa: $e');
