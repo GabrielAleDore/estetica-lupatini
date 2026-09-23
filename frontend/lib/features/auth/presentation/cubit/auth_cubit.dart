@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/auth_repository.dart';
 import 'auth_state.dart';
 
@@ -54,6 +55,11 @@ class AuthCubit extends Cubit<AuthState> {
 
   Future<void> logout() async {
     await _repository.signOut();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('lembrar_email_lupatini');
+      await prefs.setBool('lembrar_acesso_lupatini', false);
+    } catch (_) {}
     emit(state.copyWith(
       status: AuthStatus.unauthenticated,
       clearUsuario: true,

@@ -497,7 +497,7 @@ void main() {
     expect(find.text('Vendas a Receber (Pendentes)'), findsOneWidget);
   });
 
-  testWidgets('LoginPage displays form and demo access chips', (WidgetTester tester) async {
+  testWidgets('LoginPage displays form, empty fields, and remember access checkbox', (WidgetTester tester) async {
     final authCubit = AuthCubit(repository: FakeAuthRepository());
 
     await tester.pumpWidget(
@@ -508,13 +508,14 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Estética Lupatini'), findsOneWidget);
     expect(find.text('Entrar no Sistema'), findsOneWidget);
-    expect(find.text('Admin'), findsOneWidget);
-    expect(find.text('Recepção'), findsOneWidget);
-    expect(find.text('Atendimento'), findsOneWidget);
+    expect(find.text('Lembrar meu acesso'), findsOneWidget);
+    expect(find.text('Admin'), findsNothing);
+    expect(find.text('Recepção'), findsNothing);
+    expect(find.text('Atendimento'), findsNothing);
   });
 
   testWidgets('UsuariosPage displays users and new user action button', (WidgetTester tester) async {

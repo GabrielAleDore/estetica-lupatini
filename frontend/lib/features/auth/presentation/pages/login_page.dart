@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../cubit/auth_cubit.dart';
 import '../cubit/auth_state.dart';
@@ -12,10 +13,20 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  static const String _keyRememberedEmail = 'lembrar_email_lupatini';
+  static const String _keyRememberMe = 'lembrar_acesso_lupatini';
+
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'admin@lupatini.com');
-  final _senhaController = TextEditingController(text: 'admin123');
+  final _emailController = TextEditingController();
+  final _senhaController = TextEditingController();
   bool _obscurePassword = true;
+  bool _lembrarAcesso = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarEmailSalvo();
+  }
 
   @override
   void dispose() {
@@ -24,19 +35,83 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _preencherCredenciais(String email, String senha) {
-    setState(() {
-      _emailController.text = email;
-      _senhaController.text = senha;
-    });
+  Future<void> _carregarEmailSalvo() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rememberMe = prefs.getBool(_keyRememberMe) ?? false;
+      final savedEmail = prefs.getString(_keyRememberedEmail);
+      if (rememberMe && savedEmail != null && savedEmail.trim().isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _emailController.text = savedEmail.trim();
+            _lembrarAcesso = true;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
-  void _fazerLogin() {
-    if (_formKey.currentState?.validate() ?? false) {
-      context.read<AuthCubit>().login(
-        email: _emailController.text,
-        password: _senhaController.text,
+  void _onLembrarAcessoChanged(bool? value) async {
+    final checked = value ?? false;
+    setState(() {
+      _lembrarAcesso = checked;
+    });
+    if (!checked) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_keyRememberedEmail);
+        await prefs.setBool(_keyRememberMe, false);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _fazerLogin() async {
+    final email = _emailController.text.trim();
+    final senha = _senhaController.text;
+
+    // Validação preventiva discreta
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, informe seu e-mail de acesso.'),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
       );
+      return;
+    }
+
+    if (senha.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, informe sua senha de acesso.'),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (_formKey.currentState?.validate() ?? false) {
+      final sucesso = await context.read<AuthCubit>().login(
+        email: email,
+        password: senha,
+      );
+
+      if (sucesso) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          if (_lembrarAcesso) {
+            await prefs.setString(_keyRememberedEmail, email);
+            await prefs.setBool(_keyRememberMe, true);
+          } else {
+            await prefs.remove(_keyRememberedEmail);
+            await prefs.setBool(_keyRememberMe, false);
+          }
+        } catch (_) {}
+      }
     }
   }
 
@@ -134,6 +209,7 @@ class _LoginPageState extends State<LoginPage> {
                         keyboardType: TextInputType.emailAddress,
                         decoration: const InputDecoration(
                           labelText: 'E-mail do Colaborador',
+                          hintText: 'exemplo@lupatini.com',
                           prefixIcon: Icon(Icons.email_outlined, size: 20),
                           border: OutlineInputBorder(),
                         ),
@@ -152,6 +228,7 @@ class _LoginPageState extends State<LoginPage> {
                         obscureText: _obscurePassword,
                         decoration: InputDecoration(
                           labelText: 'Senha de Acesso',
+                          hintText: '••••••••',
                           prefixIcon: const Icon(Icons.lock_outline, size: 20),
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
@@ -170,9 +247,43 @@ class _LoginPageState extends State<LoginPage> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
 
-                      // Botão Entrar
+                      // Checkbox "Lembrar meu acesso"
+                      InkWell(
+                        onTap: () => _onLembrarAcessoChanged(!_lembrarAcesso),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: Checkbox(
+                                  value: _lembrarAcesso,
+                                  activeColor: AppColors.primary,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                  onChanged: _onLembrarAcessoChanged,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Lembrar meu acesso',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textPrimaryLight,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Botão Entrar no Sistema
                       BlocBuilder<AuthCubit, AuthState>(
                         builder: (context, state) {
                           final isLoading = state.status == AuthStatus.loading;
@@ -199,49 +310,14 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 24),
 
-                      // Atalhos Rápidos para Teste de Perfis (RBAC)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.borderLight),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Acesso Rápido para Demonstração (RBAC):',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textSecondaryLight),
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 6,
-                              children: [
-                                ActionChip(
-                                  avatar: const Icon(Icons.shield, size: 14, color: Color(0xFF6B21A8)),
-                                  label: const Text('Mestre', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF6B21A8))),
-                                  onPressed: () => _preencherCredenciais('mestre@lupatini.com', 'mestre123'),
-                                ),
-                                ActionChip(
-                                  avatar: const Icon(Icons.admin_panel_settings, size: 14, color: AppColors.primary),
-                                  label: const Text('Admin', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                  onPressed: () => _preencherCredenciais('admin@lupatini.com', 'admin123'),
-                                ),
-                                ActionChip(
-                                  avatar: const Icon(Icons.desk, size: 14, color: Colors.indigo),
-                                  label: const Text('Recepção', style: TextStyle(fontSize: 11)),
-                                  onPressed: () => _preencherCredenciais('recepcao@lupatini.com', 'recepcao123'),
-                                ),
-                                ActionChip(
-                                  avatar: const Icon(Icons.face_retouching_natural, size: 14, color: Colors.teal),
-                                  label: const Text('Atendimento', style: TextStyle(fontSize: 11)),
-                                  onPressed: () => _preencherCredenciais('atendimento@lupatini.com', 'atendimento123'),
-                                ),
-                              ],
-                            ),
-                          ],
+                      // Rodapé Institucional
+                      Center(
+                        child: Text(
+                          'Ambiente Seguro • Estética Lupatini',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondaryLight.withValues(alpha: 0.8),
+                          ),
                         ),
                       ),
                     ],
