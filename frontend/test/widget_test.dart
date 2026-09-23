@@ -36,6 +36,7 @@ import 'package:estetica_lupatini/features/contas_bancarias/data/contas_bancaria
 import 'package:estetica_lupatini/features/contas_bancarias/domain/models/conta_bancaria_model.dart';
 import 'package:estetica_lupatini/features/contas_bancarias/presentation/cubit/contas_bancarias_cubit.dart';
 import 'package:estetica_lupatini/features/contas_bancarias/presentation/pages/contas_bancarias_page.dart';
+import 'package:estetica_lupatini/features/dashboard/presentation/widgets/nova_receita_dialog.dart';
 
 class FakeContasBancariasRepository implements ContasBancariasRepository {
   @override
@@ -261,6 +262,17 @@ class FakeDashboardRepository implements DashboardRepository {
 
   @override
   Future<Map<String, dynamic>> registrarTransacaoAvulsa(Map<String, dynamic> dados) async => dados;
+
+  @override
+  Future<Map<String, dynamic>> obterReceitasManuaisMes(String mes) async => {
+    'total_receitas_pj': 2500.0,
+    'total_receitas_pf': 500.0,
+    'total_receitas_geral': 3000.0,
+    'transacoes': [],
+  };
+
+  @override
+  Future<Map<String, dynamic>> registrarReceitaAvulsa(Map<String, dynamic> dados) async => dados;
 }
 
 class FakeAuthRepository implements AuthRepository {
@@ -476,7 +488,9 @@ void main() {
     expect(find.text('Saldo Pessoal / Sócios (PF)'), findsOneWidget);
     expect(find.text('Patrimônio Líquido (Total)'), findsOneWidget);
     expect(find.text('VER CONTAS BANCÁRIAS'), findsOneWidget);
+    expect(find.text('+ ENTRADA / PIX'), findsOneWidget);
 
+    expect(find.text('+ NOVA ENTRADA / PIX'), findsOneWidget);
     expect(find.text('ENTRADA DE ESTOQUE'), findsOneWidget);
     expect(find.text('NOVO GASTO AVULSO'), findsOneWidget);
     expect(find.text('Vendas Efetivadas (Recebidas)'), findsOneWidget);
@@ -732,4 +746,84 @@ void main() {
     expect(find.text('Nubank PJ Clínica'), findsOneWidget);
     expect(find.text('Inter PF Sócia'), findsOneWidget);
   });
+
+  testWidgets('NovaReceitaDialog renders all form fields and submits new revenue', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final dashboardCubit = DashboardCubit(repository: FakeDashboardRepository());
+    final contas = [
+      const ContaBancariaModel(
+        id: 'cb-001',
+        nomeConta: 'Nubank PJ Clínica',
+        bancoNome: 'Nubank',
+        tipoConta: 'CORRENTE',
+        escopo: 'PJ',
+        saldoInicial: 5000.0,
+        saldoAtual: 5000.0,
+        ativo: true,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('pt', 'BR'),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [
+          Locale('pt', 'BR'),
+        ],
+        home: BlocProvider<DashboardCubit>.value(
+          value: dashboardCubit,
+          child: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => BlocProvider<DashboardCubit>.value(
+                      value: dashboardCubit,
+                      child: NovaReceitaDialog(
+                        escopoInicial: 'PJ',
+                        contasPreCarregadas: contas,
+                        onSalvar: (dados) async => dashboardCubit.registrarReceitaAvulsa(dados),
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Abrir Modal'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Open modal
+    await tester.tap(find.text('Abrir Modal'));
+    await tester.pumpAndSettle();
+
+    // Verify modal elements
+    expect(find.text('Nova Entrada / Receita Avulsa'), findsOneWidget);
+    expect(find.text('PJ • Clínica'), findsOneWidget);
+    expect(find.text('PF • Pessoal Sócios'), findsOneWidget);
+    expect(find.text('Salvar e Creditar Receita'), findsOneWidget);
+
+    // Fill fields
+    await tester.enterText(find.widgetWithText(TextFormField, 'Descrição da Receita *'), 'Recebimento PIX - Consultoria');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Valor Recebido (R\$) *'), '500,00');
+
+    // Submit form
+    await tester.tap(find.text('Salvar e Creditar Receita'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    // Dialog should be closed
+    expect(find.byType(NovaReceitaDialog), findsNothing);
+  });
 }
+

@@ -16,6 +16,11 @@ class DashboardState extends Equatable {
   final double vendasEfetivadas;
   final double vendasAReceber;
 
+  // Receitas Avulsas / Manuais (PIX, Aportes, etc.)
+  final double receitasAvulsasPJ;
+  final double receitasAvulsasPF;
+  final List<Map<String, dynamic>> transacoesReceitas;
+
   // Indicadores de Contas Bancárias (Liquidez Imediata)
   final double saldoTotalPJ;
   final double saldoTotalPF;
@@ -40,6 +45,9 @@ class DashboardState extends Equatable {
     this.balancoLiquido = 0.0,
     this.vendasEfetivadas = 0.0,
     this.vendasAReceber = 0.0,
+    this.receitasAvulsasPJ = 0.0,
+    this.receitasAvulsasPF = 0.0,
+    this.transacoesReceitas = const [],
     this.saldoTotalPJ = 0.0,
     this.saldoTotalPF = 0.0,
     this.saldoTotalGeral = 0.0,
@@ -49,6 +57,9 @@ class DashboardState extends Equatable {
     this.errorMessage,
     this.successMessage,
   });
+
+  /// Totalizador de Receitas do Mês: Vendas Efetivadas + Entradas Avulsas Efetivadas
+  double get faturamentoTotalConsolidadoPJ => vendasEfetivadas + receitasAvulsasPJ;
 
   DashboardState copyWith({
     DashboardStatus? status,
@@ -63,6 +74,9 @@ class DashboardState extends Equatable {
     double? balancoLiquido,
     double? vendasEfetivadas,
     double? vendasAReceber,
+    double? receitasAvulsasPJ,
+    double? receitasAvulsasPF,
+    List<Map<String, dynamic>>? transacoesReceitas,
     double? saldoTotalPJ,
     double? saldoTotalPF,
     double? saldoTotalGeral,
@@ -85,6 +99,9 @@ class DashboardState extends Equatable {
       balancoLiquido: balancoLiquido ?? this.balancoLiquido,
       vendasEfetivadas: vendasEfetivadas ?? this.vendasEfetivadas,
       vendasAReceber: vendasAReceber ?? this.vendasAReceber,
+      receitasAvulsasPJ: receitasAvulsasPJ ?? this.receitasAvulsasPJ,
+      receitasAvulsasPF: receitasAvulsasPF ?? this.receitasAvulsasPF,
+      transacoesReceitas: transacoesReceitas ?? this.transacoesReceitas,
       saldoTotalPJ: saldoTotalPJ ?? this.saldoTotalPJ,
       saldoTotalPF: saldoTotalPF ?? this.saldoTotalPF,
       saldoTotalGeral: saldoTotalGeral ?? this.saldoTotalGeral,
@@ -110,6 +127,9 @@ class DashboardState extends Equatable {
         balancoLiquido,
         vendasEfetivadas,
         vendasAReceber,
+        receitasAvulsasPJ,
+        receitasAvulsasPF,
+        transacoesReceitas,
         saldoTotalPJ,
         saldoTotalPF,
         saldoTotalGeral,

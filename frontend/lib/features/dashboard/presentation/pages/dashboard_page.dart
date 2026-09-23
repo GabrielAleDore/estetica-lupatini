@@ -6,9 +6,11 @@ import '../cubit/dashboard_cubit.dart';
 import '../cubit/dashboard_state.dart';
 import '../widgets/entrada_estoque_dialog.dart';
 import '../widgets/lancamento_avulso_dialog.dart';
+import '../widgets/nova_receita_dialog.dart';
 import '../../services/relatorio_dre_pdf_service.dart';
 import '../../../shell/main_navigation_shell.dart';
 import '../../../contas_bancarias/presentation/pages/contas_bancarias_page.dart';
+import '../../../contas_bancarias/presentation/cubit/contas_bancarias_cubit.dart';
 
 class DashboardPage extends StatelessWidget {
   final DashboardCubit? cubit;
@@ -63,6 +65,27 @@ class _DashboardView extends StatelessWidget {
       ),
     );
   }
+
+  void _abrirModalNovaReceita(BuildContext context, [String? escopoInicial]) {
+    final cubit = context.read<DashboardCubit>();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => NovaReceitaDialog(
+        escopoInicial: escopoInicial,
+        onSalvar: (dados) async {
+          final res = await cubit.registrarReceitaAvulsa(dados);
+          if (res && context.mounted) {
+            try {
+              context.read<ContasBancariasCubit>().carregarContas();
+            } catch (_) {}
+          }
+          return res;
+        },
+      ),
+    );
+  }
+
 
   void _abrirModalGerarDre(BuildContext context, String mesReferenciaAtual) {
     showDialog(
@@ -213,6 +236,20 @@ class _DashboardView extends StatelessWidget {
                           ),
                         ),
                         ElevatedButton.icon(
+                          onPressed: () => _abrirModalNovaReceita(context),
+                          icon: const Icon(Icons.add_card, size: 18),
+                          label: const Text(
+                            '+ NOVA ENTRADA / PIX',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.success,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                            elevation: 2,
+                          ),
+                        ),
+                        ElevatedButton.icon(
                           onPressed: () => _abrirModalLancamentoAvulso(context),
                           icon: const Icon(Icons.receipt_long, size: 18),
                           label: const Text(
@@ -253,6 +290,8 @@ class _DashboardView extends StatelessWidget {
                   qtdContasPF: state.qtdContasPF,
                   saldoOperacionalMes: lucroOperacionalPj,
                   onGerenciarContas: () => _navegarParaContasBancarias(context),
+                  onNovaReceita: () => _abrirModalNovaReceita(context),
+                  onNovaReceitaEscopo: (escopo) => _abrirModalNovaReceita(context, escopo),
                 ),
                 const SizedBox(height: 24),
 
@@ -383,10 +422,16 @@ class _DashboardView extends StatelessWidget {
                       ),
                       const Divider(height: 24),
                       _DRELineItem(
-                        label: '(+) Receita Bruta Total',
-                        value: currencyFormat.format(double.tryParse(dre['receita_bruta']?.toString() ?? '0') ?? 0.0),
-                        isBold: true,
+                        label: '(+) Receita de Vendas Efetivadas (PDV)',
+                        value: currencyFormat.format(state.vendasEfetivadas),
                       ),
+                      if (state.receitasAvulsasPJ > 0)
+                        _DRELineItem(
+                          label: '(+) Entradas e Receitas Avulsas (PIX/Aportes PJ)',
+                          value: currencyFormat.format(state.receitasAvulsasPJ),
+                          color: AppColors.success,
+                          isBold: true,
+                        ),
                       _DRELineItem(
                         label: '(-) Descontos Comerciais Concedidos',
                         value: currencyFormat.format(double.tryParse(dre['descontos_concedidos']?.toString() ?? '0') ?? 0.0),
@@ -712,6 +757,8 @@ class _BankLiquidityBlock extends StatelessWidget {
   final int qtdContasPF;
   final double saldoOperacionalMes;
   final VoidCallback onGerenciarContas;
+  final VoidCallback onNovaReceita;
+  final void Function(String escopo) onNovaReceitaEscopo;
 
   const _BankLiquidityBlock({
     required this.saldoTotalPJ,
@@ -721,6 +768,8 @@ class _BankLiquidityBlock extends StatelessWidget {
     required this.qtdContasPF,
     required this.saldoOperacionalMes,
     required this.onGerenciarContas,
+    required this.onNovaReceita,
+    required this.onNovaReceitaEscopo,
   });
 
   @override
@@ -744,7 +793,7 @@ class _BankLiquidityBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cabeçalho do Bloco com Segregação e Ação Rápida
+          // Cabeçalho do Bloco com Segregação e Ações Rápidas
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -785,16 +834,33 @@ class _BankLiquidityBlock extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: onGerenciarContas,
-                icon: const Icon(Icons.open_in_new, size: 16),
-                label: const Text('VER CONTAS BANCÁRIAS'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: onNovaReceita,
+                    icon: const Icon(Icons.add_card, size: 16),
+                    label: const Text('+ ENTRADA / PIX'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onGerenciarContas,
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('VER CONTAS BANCÁRIAS'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -815,10 +881,12 @@ class _BankLiquidityBlock extends StatelessWidget {
                 subtitle: qtdContasPJ == 0
                     ? 'Nenhuma conta PJ ativa'
                     : '$qtdContasPJ ${qtdContasPJ == 1 ? "conta operacional ativa" : "contas operacionais ativas"}',
-                description: 'Recursos para custeio, insumos e operação clínica',
+                description: 'Recursos para custeio e operação clínica',
                 icon: Icons.business_center_rounded,
                 accentColor: AppColors.pjClinical,
                 accentBg: const Color(0xFFF7ECE8),
+                actionLabel: '+ PIX / Receita',
+                onActionTap: () => onNovaReceitaEscopo('PJ'),
                 onTap: onGerenciarContas,
               );
 
@@ -831,10 +899,12 @@ class _BankLiquidityBlock extends StatelessWidget {
                 subtitle: qtdContasPF == 0
                     ? 'Nenhuma conta PF ativa'
                     : '$qtdContasPF ${qtdContasPF == 1 ? "conta pessoal ativa" : "contas pessoais ativas"}',
-                description: 'Patrimônio segregado dos sócios (PF)',
+                description: 'Patrimônio particular segregado dos sócios',
                 icon: Icons.person_pin_rounded,
                 accentColor: const Color(0xFFB07D4F),
                 accentBg: const Color(0xFFFAF3EC),
+                actionLabel: '+ Aporte / PIX',
+                onActionTap: () => onNovaReceitaEscopo('PF'),
                 onTap: onGerenciarContas,
               );
 
@@ -850,6 +920,8 @@ class _BankLiquidityBlock extends StatelessWidget {
                 accentColor: const Color(0xFF2E7D32),
                 accentBg: const Color(0xFFE8F5E9),
                 isHighlighted: true,
+                actionLabel: '+ Entrada Geral',
+                onActionTap: onNovaReceita,
                 onTap: onGerenciarContas,
               );
 
@@ -912,6 +984,8 @@ class _BankLiquidityCard extends StatelessWidget {
   final Color accentColor;
   final Color accentBg;
   final bool isHighlighted;
+  final String? actionLabel;
+  final VoidCallback? onActionTap;
   final VoidCallback onTap;
 
   const _BankLiquidityCard({
@@ -926,6 +1000,8 @@ class _BankLiquidityCard extends StatelessWidget {
     required this.accentColor,
     required this.accentBg,
     this.isHighlighted = false,
+    this.actionLabel,
+    this.onActionTap,
     required this.onTap,
   });
 
@@ -1034,7 +1110,7 @@ class _BankLiquidityCard extends StatelessWidget {
             ),
             const Divider(height: 16),
 
-            // Detalhe / Descrição
+            // Detalhe / Descrição + Ação Rápida
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1049,11 +1125,39 @@ class _BankLiquidityCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right,
-                  size: 16,
-                  color: accentColor.withValues(alpha: 0.7),
-                ),
+                if (actionLabel != null && onActionTap != null)
+                  InkWell(
+                    onTap: onActionTap,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add, size: 12, color: accentColor),
+                          const SizedBox(width: 2),
+                          Text(
+                            actionLabel!,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: accentColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.chevron_right,
+                    size: 16,
+                    color: accentColor.withValues(alpha: 0.7),
+                  ),
               ],
             ),
           ],
@@ -1062,6 +1166,7 @@ class _BankLiquidityCard extends StatelessWidget {
     );
   }
 }
+
 
 class _DRELineItem extends StatelessWidget {
   final String label;

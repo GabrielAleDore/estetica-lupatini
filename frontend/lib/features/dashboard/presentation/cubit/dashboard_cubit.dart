@@ -14,23 +14,38 @@ class DashboardCubit extends Cubit<DashboardState> {
     emit(state.copyWith(status: DashboardStatus.loading, mesReferencia: mesConsulta));
 
     try {
-      // 1. Chamada concorrente: resumo gerencial agregado + saldos das contas bancárias
+      // 1. Chamada concorrente: resumo gerencial agregado + saldos bancários + receitas avulsas manuais
       final results = await Future.wait([
         _repository.obterDashboardResumo(mesConsulta),
         _repository.obterResumoContasBancarias(),
+        _repository.obterReceitasManuaisMes(mesConsulta),
       ]);
 
       final resumo = results[0];
       final resumoBancario = results[1];
+      final receitasManuais = results[2];
 
-      final dre = resumo['dre'] as Map<String, dynamic>? ?? {};
+      final dre = Map<String, dynamic>.from(resumo['dre'] as Map? ?? {});
       final alertas = (resumo['alertas_estoque'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       final totalAlerta = resumo['total_itens_alerta_estoque'] as int? ?? alertas.length;
-      final faturadoPj = double.tryParse(resumo['total_faturado_pj']?.toString() ?? '0') ?? 0.0;
+      final faturadoPjBase = double.tryParse(resumo['total_faturado_pj']?.toString() ?? '0') ?? 0.0;
       final despesasPf = double.tryParse(resumo['total_despesas_pf']?.toString() ?? '0') ?? 0.0;
-      final balanco = double.tryParse(resumo['balanco_liquido']?.toString() ?? '0') ?? 0.0;
-      final vendasEfetivadas = double.tryParse(resumo['vendas_efetivadas']?.toString() ?? '0') ?? 0.0;
+      final balancoBase = double.tryParse(resumo['balanco_liquido']?.toString() ?? '0') ?? 0.0;
+      final vendasEfetivadas = double.tryParse(resumo['vendas_efetivadas']?.toString() ?? '0') ?? faturadoPjBase;
       final vendasAReceber = double.tryParse(resumo['vendas_a_receber']?.toString() ?? '0') ?? 0.0;
+
+      // Dados de receitas avulsas manuais
+      final recAvulsasPJ = double.tryParse(receitasManuais['total_receitas_pj']?.toString() ?? '0') ?? 0.0;
+      final recAvulsasPF = double.tryParse(receitasManuais['total_receitas_pf']?.toString() ?? '0') ?? 0.0;
+      final listaReceitas = (receitasManuais['transacoes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+      // Faturamento PJ consolidado: Vendas PDV Efetivadas + Entradas Manuais Efetivadas PJ
+      final faturadoConsolidadoPj = faturadoPjBase + recAvulsasPJ;
+      final balancoConsolidado = balancoBase + recAvulsasPJ;
+
+      // Atualiza no DRE em memória
+      dre['receita_liquida'] = faturadoConsolidadoPj;
+      dre['receitas_avulsas_pj'] = recAvulsasPJ;
 
       // Dados de liquidez bancária
       final saldoPJ = double.tryParse(resumoBancario['saldo_total_pj']?.toString() ?? '0') ?? 0.0;
@@ -46,11 +61,14 @@ class DashboardCubit extends Cubit<DashboardState> {
         dre: dre,
         alertasEstoque: alertas,
         totalItensAlertaEstoque: totalAlerta,
-        totalFaturadoPj: faturadoPj,
+        totalFaturadoPj: faturadoConsolidadoPj,
         totalDespesasPf: despesasPf,
-        balancoLiquido: balanco,
+        balancoLiquido: balancoConsolidado,
         vendasEfetivadas: vendasEfetivadas,
         vendasAReceber: vendasAReceber,
+        receitasAvulsasPJ: recAvulsasPJ,
+        receitasAvulsasPF: recAvulsasPF,
+        transacoesReceitas: listaReceitas,
         saldoTotalPJ: saldoPJ,
         saldoTotalPF: saldoPF,
         saldoTotalGeral: saldoGeral,
@@ -75,10 +93,12 @@ class DashboardCubit extends Cubit<DashboardState> {
           _repository.obterDRE(mesConsulta),
           _repository.listarAlertasEstoque(),
           _repository.obterResumoContasBancarias(),
+          _repository.obterReceitasManuaisMes(mesConsulta),
         ]);
-        final dre = resultsFallback[0] as Map<String, dynamic>;
+        final dre = Map<String, dynamic>.from(resultsFallback[0] as Map? ?? {});
         final alertas = resultsFallback[1] as List<Map<String, dynamic>>;
         final resumoBancario = resultsFallback[2] as Map<String, dynamic>;
+        final receitasManuais = resultsFallback[3] as Map<String, dynamic>;
 
         final saldoPJ = double.tryParse(resumoBancario['saldo_total_pj']?.toString() ?? '0') ?? 0.0;
         final saldoPF = double.tryParse(resumoBancario['saldo_total_pf']?.toString() ?? '0') ?? 0.0;
@@ -87,10 +107,17 @@ class DashboardCubit extends Cubit<DashboardState> {
         final qtdPF = resumoBancario['qtd_contas_pf'] as int? ?? 0;
         final contasBancarias = (resumoBancario['contas'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
+        final recAvulsasPJ = double.tryParse(receitasManuais['total_receitas_pj']?.toString() ?? '0') ?? 0.0;
+        final recAvulsasPF = double.tryParse(receitasManuais['total_receitas_pf']?.toString() ?? '0') ?? 0.0;
+        final listaReceitas = (receitasManuais['transacoes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
         emit(state.copyWith(
           status: DashboardStatus.loaded,
           dre: dre,
           alertasEstoque: alertas,
+          receitasAvulsasPJ: recAvulsasPJ,
+          receitasAvulsasPF: recAvulsasPF,
+          transacoesReceitas: listaReceitas,
           saldoTotalPJ: saldoPJ,
           saldoTotalPF: saldoPF,
           saldoTotalGeral: saldoGeral,
@@ -129,6 +156,25 @@ class DashboardCubit extends Cubit<DashboardState> {
       emit(state.copyWith(
         status: DashboardStatus.success,
         successMessage: 'Entrada de estoque registrada com sucesso!',
+      ));
+      await carregarDashboard();
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: DashboardStatus.error,
+        errorMessage: e.toString(),
+      ));
+      return false;
+    }
+  }
+
+  Future<bool> registrarReceitaAvulsa(Map<String, dynamic> dados) async {
+    emit(state.copyWith(status: DashboardStatus.submitting));
+    try {
+      await _repository.registrarReceitaAvulsa(dados);
+      emit(state.copyWith(
+        status: DashboardStatus.success,
+        successMessage: 'Entrada / Receita avulsa registrada e saldo creditado com sucesso!',
       ));
       await carregarDashboard();
       return true;

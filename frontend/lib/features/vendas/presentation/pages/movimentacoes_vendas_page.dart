@@ -4,6 +4,10 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../cubit/vendas_historico_cubit.dart';
 import '../cubit/vendas_historico_state.dart';
+import '../../../dashboard/data/dashboard_repository.dart';
+import '../../../dashboard/presentation/cubit/dashboard_cubit.dart';
+import '../../../dashboard/presentation/widgets/nova_receita_dialog.dart';
+import '../../../contas_bancarias/presentation/cubit/contas_bancarias_cubit.dart';
 
 class MovimentacoesVendasPage extends StatelessWidget {
   final VendasHistoricoCubit? cubit;
@@ -48,6 +52,43 @@ class _MovimentacoesVendasViewState extends State<_MovimentacoesVendasView> {
   void dispose() {
     _buscaController.dispose();
     super.dispose();
+  }
+
+  void _abrirModalNovaReceita(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => NovaReceitaDialog(
+        onSalvar: (dados) async {
+          try {
+            await DashboardRepository().registrarReceitaAvulsa(dados);
+            if (context.mounted) {
+              context.read<VendasHistoricoCubit>().carregarVendas();
+              try {
+                context.read<ContasBancariasCubit>().carregarContas();
+              } catch (_) {}
+              try {
+                context.read<DashboardCubit>().carregarDashboard();
+              } catch (_) {}
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Entrada avulsa / Receita registrada e creditada com sucesso!'),
+                  backgroundColor: AppColors.success,
+                ),
+              );
+            }
+            return true;
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Erro ao registrar receita: $e'), backgroundColor: AppColors.error),
+              );
+            }
+            return false;
+          }
+        },
+      ),
+    );
   }
 
   void _abrirModalRecebimento(BuildContext context, Map<String, dynamic> venda) {
@@ -383,6 +424,17 @@ class _MovimentacoesVendasViewState extends State<_MovimentacoesVendasView> {
                           valor: _currencyFormat.format(state.totalPendente),
                           cor: Colors.amber.shade800,
                           icone: Icons.schedule,
+                        ),
+                        const SizedBox(width: 16),
+                        ElevatedButton.icon(
+                          onPressed: () => _abrirModalNovaReceita(context),
+                          icon: const Icon(Icons.add_card, size: 18),
+                          label: const Text('+ Nova Entrada / PIX', style: TextStyle(fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.success,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          ),
                         ),
                       ],
                     ),
