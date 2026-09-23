@@ -32,6 +32,55 @@ import 'package:estetica_lupatini/features/agenda/data/agenda_repository.dart';
 import 'package:estetica_lupatini/features/agenda/domain/models/agendamento.dart';
 import 'package:estetica_lupatini/features/agenda/presentation/cubit/agenda_cubit.dart';
 import 'package:estetica_lupatini/features/agenda/presentation/pages/agenda_page.dart';
+import 'package:estetica_lupatini/features/contas_bancarias/data/contas_bancarias_repository.dart';
+import 'package:estetica_lupatini/features/contas_bancarias/domain/models/conta_bancaria_model.dart';
+import 'package:estetica_lupatini/features/contas_bancarias/presentation/cubit/contas_bancarias_cubit.dart';
+import 'package:estetica_lupatini/features/contas_bancarias/presentation/pages/contas_bancarias_page.dart';
+
+class FakeContasBancariasRepository implements ContasBancariasRepository {
+  @override
+  Stream<List<Map<String, dynamic>>> streamContas() => const Stream.empty();
+
+  @override
+  Future<List<ContaBancariaModel>> getContas({String? escopo, bool apenasAtivas = false}) async => [
+    const ContaBancariaModel(
+      id: 'cb-001',
+      nomeConta: 'Nubank PJ Clínica',
+      bancoNome: 'Nubank',
+      tipoConta: 'CORRENTE',
+      escopo: 'PJ',
+      saldoInicial: 5000.0,
+      saldoAtual: 5000.0,
+      corIdentificadora: '#820AD1',
+      chavePix: 'clinica@pix.com',
+      ativo: true,
+    ),
+    const ContaBancariaModel(
+      id: 'cb-002',
+      nomeConta: 'Inter PF Sócia',
+      bancoNome: 'Banco Inter',
+      tipoConta: 'CORRENTE',
+      escopo: 'PF',
+      saldoInicial: 2500.0,
+      saldoAtual: 2500.0,
+      corIdentificadora: '#FF7A00',
+      chavePix: 'socia@pix.com',
+      ativo: true,
+    ),
+  ];
+
+  @override
+  Future<ContaBancariaModel> createConta(ContaBancariaModel conta) async => conta;
+
+  @override
+  Future<ContaBancariaModel> updateConta(ContaBancariaModel conta) async => conta;
+
+  @override
+  Future<void> toggleAtivo(String id, bool ativo) async {}
+
+  @override
+  Future<void> deleteOuInativarConta(String id, {bool deleteDefinitivo = false}) async {}
+}
 
 class FakeAgendaRepository implements AgendaRepository {
   @override
@@ -631,5 +680,38 @@ void main() {
 
     expect(submittedData, isNotNull);
     expect(submittedData!['data_nascimento'], '2003-06-16');
+  });
+
+  testWidgets('ContasBancariasPage displays KPI cards, tabs and bank cards', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final cubit = ContasBancariasCubit(repository: FakeContasBancariasRepository());
+    await cubit.carregarContas();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('pt', 'BR'),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [
+          Locale('pt', 'BR'),
+        ],
+        home: ContasBancariasPage(cubit: cubit),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(ContasBancariasPage), findsOneWidget);
+    expect(find.text('Gestão de Contas Bancárias'), findsOneWidget);
+    expect(find.text('Saldo Total PJ (Clínica)'), findsOneWidget);
+    expect(find.text('Saldo Total PF (Pessoal/Sócios)'), findsOneWidget);
+    expect(find.text('Saldo Consolidado Total'), findsOneWidget);
+    expect(find.text('Nubank PJ Clínica'), findsOneWidget);
+    expect(find.text('Inter PF Sócia'), findsOneWidget);
   });
 }

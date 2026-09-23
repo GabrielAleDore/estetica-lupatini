@@ -8,6 +8,7 @@ import 'core/services/supabase_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/cubit/auth_cubit.dart';
 import 'features/contas_pagar/presentation/cubit/contas_pagar_cubit.dart';
+import 'features/contas_bancarias/presentation/cubit/contas_bancarias_cubit.dart';
 import 'features/vendas/presentation/cubit/vendas_historico_cubit.dart';
 import 'features/vendas/presentation/cubit/vendas_cubit.dart';
 import 'features/shell/main_navigation_shell.dart';
@@ -38,6 +39,9 @@ class EsteticaLupatiniApp extends StatelessWidget {
         ),
         BlocProvider<ContasPagarCubit>(
           create: (_) => ContasPagarCubit(),
+        ),
+        BlocProvider<ContasBancariasCubit>(
+          create: (_) => ContasBancariasCubit()..carregarContas(),
         ),
       ],
       child: MaterialApp(

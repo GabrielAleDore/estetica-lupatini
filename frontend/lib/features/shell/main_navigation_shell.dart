@@ -14,6 +14,7 @@ import '../catalogo/presentation/pages/catalogo_page.dart';
 import '../contas_pagar/presentation/pages/contas_pagar_page.dart';
 import '../usuarios/presentation/pages/usuarios_page.dart';
 import '../agenda/presentation/pages/agenda_page.dart';
+import '../contas_bancarias/presentation/pages/contas_bancarias_page.dart';
 
 class _NavDestinationItem {
   final String label;
@@ -131,6 +132,13 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       rolesPermitidas: ['ADMIN', 'RECEPCAO'],
     ),
     _NavDestinationItem(
+      label: 'Contas Bancárias',
+      icon: Icons.account_balance_outlined,
+      selectedIcon: Icons.account_balance,
+      page: ContasBancariasPage(),
+      rolesPermitidas: ['ADMIN', 'MESTRE'],
+    ),
+    _NavDestinationItem(
       label: 'Gestão de Usuários',
       icon: Icons.manage_accounts_outlined,
       selectedIcon: Icons.manage_accounts,
@@ -142,7 +150,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
   List<_NavDestinationItem> _obterDestinosFiltrados(String role) {
     if (role.toUpperCase() == 'MESTRE') {
       return _todosDestinos
-          .where((item) => item.label == 'Gestão de Usuários')
+          .where((item) => item.label == 'Gestão de Usuários' || item.label == 'Contas Bancárias')
           .toList();
     }
     return _todosDestinos

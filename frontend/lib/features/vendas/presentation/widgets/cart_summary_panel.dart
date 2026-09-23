@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../contas_bancarias/presentation/cubit/contas_bancarias_cubit.dart';
 import '../cubit/vendas_cubit.dart';
 import '../cubit/vendas_state.dart';
 
@@ -467,6 +468,46 @@ class CartSummaryPanel extends StatelessWidget {
                   ),
                 ],
               ),
+
+              // Exibe Chave PIX ativa da conta bancária da clínica se PIX selecionado
+              if (state.formaPagamento == 'PIX') ...[
+                const SizedBox(height: 10),
+                Builder(
+                  builder: (ctx) {
+                    try {
+                      final bCubit = ctx.watch<ContasBancariasCubit>();
+                      final contasPjPix = bCubit.state.contas
+                          .where((c) => c.isPj && c.ativo && c.chavePix != null && c.chavePix!.isNotEmpty)
+                          .toList();
+                      if (contasPjPix.isEmpty) return const SizedBox.shrink();
+                      final contaPix = contasPjPix.first;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.teal.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.pix_outlined, size: 16, color: Colors.teal),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'PIX da Clínica (${contaPix.nomeConta}): ${contaPix.chavePix}',
+                                style: const TextStyle(fontSize: 11, color: Colors.teal, fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    } catch (_) {
+                      return const SizedBox.shrink();
+                    }
+                  },
+                ),
+              ],
 
               // Parcelamento se Cartão de Crédito
               if (state.formaPagamento == 'CARTAO_CREDITO') ...[

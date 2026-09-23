@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../contas_bancarias/presentation/cubit/contas_bancarias_cubit.dart';
 import '../cubit/contas_pagar_cubit.dart';
 import '../cubit/contas_pagar_state.dart';
 
@@ -428,6 +429,7 @@ class _ModalNovaDespesaState extends State<_ModalNovaDespesa> {
   String _escopo = 'PJ';
   String _tipoRecorrencia = 'AVULSA';
   String? _categoriaId;
+  String? _contaBancariaId;
   DateTime _dataVencimento = DateTime.now();
   bool _jaPago = false;
   bool _isLoading = false;
@@ -455,6 +457,7 @@ class _ModalNovaDespesaState extends State<_ModalNovaDespesa> {
         'tipo_recorrencia': _tipoRecorrencia,
         'status': _jaPago ? 'PAGO' : 'PENDENTE',
         'data_pagamento': _jaPago ? DateTime.now().toIso8601String().substring(0, 10) : null,
+        if (_jaPago && _contaBancariaId != null) 'conta_bancaria_id': _contaBancariaId,
       };
 
       final ok = await context.read<ContasPagarCubit>().cadastrarDespesa(dados);
@@ -592,6 +595,41 @@ class _ModalNovaDespesaState extends State<_ModalNovaDespesa> {
                   value: _jaPago,
                   onChanged: (val) => setState(() => _jaPago = val ?? false),
                 ),
+                if (_jaPago) ...[
+                  Builder(
+                    builder: (ctx) {
+                      try {
+                        final bCubit = ctx.watch<ContasBancariasCubit>();
+                        final contasAtivas = bCubit.state.contas.where((c) => c.ativo).toList();
+                        if (contasAtivas.isEmpty) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: DropdownButtonFormField<String?>(
+                            isExpanded: true,
+                            initialValue: _contaBancariaId,
+                            decoration: const InputDecoration(
+                              labelText: 'Conta Bancária de Débito (Opcional)',
+                              prefixIcon: Icon(Icons.account_balance),
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              const DropdownMenuItem(value: null, child: Text('Sem Vínculo com Conta')),
+                              ...contasAtivas.map(
+                                (c) => DropdownMenuItem(
+                                  value: c.id,
+                                  child: Text('${c.nomeConta} (${c.escopo} - ${c.bancoNome})'),
+                                ),
+                              ),
+                            ],
+                            onChanged: (val) => setState(() => _contaBancariaId = val),
+                          ),
+                        );
+                      } catch (_) {
+                        return const SizedBox.shrink();
+                      }
+                    },
+                  ),
+                ],
               ],
             ),
           ),
