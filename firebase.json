@@ -14,16 +14,16 @@
     ],
     "headers": [
       {
-        "source": "**/*.@(js|wasm|css|json)",
+        "source": "**/*.@(jpg|jpeg|gif|png|svg|webp|woff|woff2|ttf|eot)",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "max-age=31536000"
+            "value": "max-age=31536000, immutable"
           }
         ]
       },
       {
-        "source": "index.html",
+        "source": "**/*.@(js|html|json)",
         "headers": [
           {
             "key": "Cache-Control",
@@ -32,7 +32,25 @@
         ]
       },
       {
-        "source": "flutter_service_worker.js",
+        "source": "flutter_bootstrap.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "main.dart.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "index.html",
         "headers": [
           {
             "key": "Cache-Control",
