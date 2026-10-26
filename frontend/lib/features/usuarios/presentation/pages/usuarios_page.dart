@@ -41,6 +41,55 @@ class _UsuariosViewState extends State<_UsuariosView> {
     );
   }
 
+  void _confirmarExclusao(BuildContext context, dynamic user) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppColors.error),
+            SizedBox(width: 8),
+            Text('Excluir Usuário'),
+          ],
+        ),
+        content: Text(
+          'Tem certeza que deseja excluir permanentemente o usuário "${user.nome}" (${user.email})?\n\n'
+          'Esta ação removerá o colaborador definitivamente do sistema.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              final cubit = context.read<AuthCubit>();
+              final sucesso = await cubit.excluirUsuario(user.id);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      sucesso
+                          ? 'Usuário "${user.nome}" excluído com sucesso.'
+                          : 'Falha ao excluir usuário.',
+                    ),
+                    backgroundColor: sucesso ? AppColors.success : AppColors.error,
+                  ),
+                );
+              }
+            },
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _corPerfil(String role) {
     switch (role.toUpperCase()) {
       case 'MESTRE':
@@ -127,9 +176,10 @@ class _UsuariosViewState extends State<_UsuariosView> {
                             itemBuilder: (context, index) {
                               final user = colaboradores[index];
                               final currentUser = state.usuario;
-                              final isMestre = currentUser?.isMestre ?? false;
-                              final podeAlternar = !user.isMestre && 
-                                  (isMestre || (!user.isAdmin && (currentUser?.isAdmin ?? false)));
+                              final isAdministrador = currentUser?.isAdmin == true || currentUser?.isMestre == true;
+                              final isProprioUsuario = user.id == currentUser?.id;
+                              final podeAlternar = isAdministrador && !isProprioUsuario;
+                              final podeExcluir = isAdministrador && !isProprioUsuario;
                               final roleColor = _corPerfil(user.role);
 
                               return ListTile(
@@ -189,7 +239,7 @@ class _UsuariosViewState extends State<_UsuariosView> {
                                         color: user.ativo ? AppColors.success : AppColors.error,
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 4),
                                     Switch(
                                       value: user.ativo,
                                       activeThumbColor: AppColors.success,
@@ -199,6 +249,14 @@ class _UsuariosViewState extends State<_UsuariosView> {
                                             }
                                           : null,
                                     ),
+                                    if (podeExcluir) ...[
+                                      const SizedBox(width: 4),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.error),
+                                        tooltip: 'Excluir usuário',
+                                        onPressed: () => _confirmarExclusao(context, user),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               );
@@ -304,17 +362,17 @@ class _NovoUsuarioDialogState extends State<_NovoUsuarioDialog> {
               Builder(
                 builder: (context) {
                   final currentUser = context.read<AuthCubit>().state.usuario;
-                  final isMestre = currentUser?.isMestre ?? false;
+                  final isAdministrador = currentUser?.isAdmin == true || currentUser?.isMestre == true;
 
                   final items = <DropdownMenuItem<String>>[
-                    if (isMestre)
-                      const DropdownMenuItem(value: 'ADMIN', child: Text('Administrador Geral (Gestão Total)')),
+                    if (isAdministrador)
+                      const DropdownMenuItem(value: 'ADMIN', child: Text('Administrador (Gestão Total)')),
                     const DropdownMenuItem(value: 'RECEPCAO', child: Text('Recepção (PDV, Clientes e Agendamentos)')),
                     const DropdownMenuItem(value: 'ATENDIMENTO', child: Text('Atendimento (Apenas PDV/Execução)')),
                   ];
 
                   return DropdownButtonFormField<String>(
-                    initialValue: isMestre ? _role : (_role == 'ADMIN' ? 'RECEPCAO' : _role),
+                    initialValue: _role,
                     decoration: const InputDecoration(labelText: 'Perfil de Acesso (Role) *', border: OutlineInputBorder()),
                     items: items,
                     onChanged: (val) {

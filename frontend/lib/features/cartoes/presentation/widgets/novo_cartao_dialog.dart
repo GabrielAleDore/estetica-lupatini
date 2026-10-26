@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/utils/moeda_input_formatter.dart';
 
 class NovoCartaoDialog extends StatefulWidget {
+  final Map<String, dynamic>? cartaoParaEditar;
   final Future<bool> Function(Map<String, dynamic> dados) onSalvar;
 
-  const NovoCartaoDialog({super.key, required this.onSalvar});
+  const NovoCartaoDialog({
+    super.key,
+    this.cartaoParaEditar,
+    required this.onSalvar,
+  });
 
   @override
   State<NovoCartaoDialog> createState() => _NovoCartaoDialogState();
@@ -13,12 +20,31 @@ class NovoCartaoDialog extends StatefulWidget {
 class _NovoCartaoDialogState extends State<NovoCartaoDialog> {
   final _formKey = GlobalKey<FormState>();
 
-  final _nomeController = TextEditingController();
-  final _fechamentoController = TextEditingController(text: '18');
-  final _vencimentoController = TextEditingController(text: '25');
-  final _limiteController = TextEditingController(text: '10000.00');
-  String _escopo = 'PJ';
+  late final TextEditingController _nomeController;
+  late final TextEditingController _fechamentoController;
+  late final TextEditingController _vencimentoController;
+  late final TextEditingController _limiteController;
+  late String _escopo;
+  late bool _ativo;
   bool _isSalvando = false;
+
+  bool get _isEdicao => widget.cartaoParaEditar != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final c = widget.cartaoParaEditar;
+    _nomeController = TextEditingController(text: c?['nome'] ?? '');
+    _fechamentoController = TextEditingController(text: c?['dia_fechamento']?.toString() ?? '18');
+    _vencimentoController = TextEditingController(text: c?['dia_vencimento']?.toString() ?? '25');
+
+    final limiteVal = (c?['limite'] as num?)?.toDouble() ?? 10000.0;
+    _limiteController = TextEditingController(
+      text: NumberFormat.currency(locale: 'pt_BR', symbol: '').format(limiteVal).trim(),
+    );
+    _escopo = c?['escopo']?.toString() ?? 'PJ';
+    _ativo = c?['ativo'] ?? true;
+  }
 
   @override
   void dispose() {
@@ -39,8 +65,8 @@ class _NovoCartaoDialogState extends State<NovoCartaoDialog> {
       'escopo': _escopo,
       'dia_fechamento': int.parse(_fechamentoController.text.trim()),
       'dia_vencimento': int.parse(_vencimentoController.text.trim()),
-      'limite': double.tryParse(_limiteController.text.trim().replaceAll(',', '.')) ?? 0.0,
-      'ativo': true,
+      'limite': MoedaInputFormatter.parse(_limiteController.text),
+      'ativo': _ativo,
     };
 
     final sucesso = await widget.onSalvar(dados);
@@ -75,12 +101,15 @@ class _NovoCartaoDialogState extends State<NovoCartaoDialog> {
                             color: AppColors.pjClinical.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Icon(Icons.credit_card, color: AppColors.pjClinical),
+                          child: Icon(
+                            _isEdicao ? Icons.edit_note : Icons.credit_card,
+                            color: AppColors.pjClinical,
+                          ),
                         ),
                         const SizedBox(width: 12),
-                        const Text(
-                          'Cadastrar Novo Cartão / Conta',
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                        Text(
+                          _isEdicao ? 'Editar Cartão' : 'Cadastrar Novo Cartão / Conta',
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -101,26 +130,7 @@ class _NovoCartaoDialogState extends State<NovoCartaoDialog> {
                   ),
                   validator: (v) => (v == null || v.trim().isEmpty) ? 'Informe o nome do cartão.' : null,
                 ),
-                const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  initialValue: _escopo,
-                  decoration: const InputDecoration(
-                    labelText: 'Regime / Escopo *',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.shield_outlined),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'PJ',
-                      child: Text('Clínica (PJ) - Despesas Operacionais e Equipamentos'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'PF',
-                      child: Text('Pessoal dos Sócios (PF) - Gastos Particulares'),
-                    ),
-                  ],
-                  onChanged: (v) => setState(() => _escopo = v!),
-                ),
+
                 const SizedBox(height: 14),
                 Row(
                   children: [
@@ -163,14 +173,53 @@ class _NovoCartaoDialogState extends State<NovoCartaoDialog> {
                 TextFormField(
                   controller: _limiteController,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    MoedaInputFormatter(),
+                  ],
                   decoration: const InputDecoration(
                     labelText: 'Limite Total (R\$)',
-                    hintText: '10000.00',
+                    hintText: '0,00',
                     prefixIcon: Icon(Icons.attach_money),
+                    prefixText: 'R\$ ',
                     border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 14),
+
+                // Escopo (PJ / PF)
+                Row(
+                  children: [
+                    const Text('Regime: ', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(width: 12),
+                    ChoiceChip(
+                      label: const Text('PJ (Clínica)'),
+                      selected: _escopo == 'PJ',
+                      onSelected: (val) => setState(() => _escopo = 'PJ'),
+                      selectedColor: AppColors.pjClinical.withValues(alpha: 0.2),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('PF (Dra. Camila)'),
+                      selected: _escopo == 'PF',
+                      onSelected: (val) => setState(() => _escopo = 'PF'),
+                      selectedColor: AppColors.pfPersonal.withValues(alpha: 0.2),
+                    ),
+                  ],
+                ),
+
+                if (_isEdicao) ...[
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    title: const Text('Cartão Ativo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    subtitle: const Text('Habilita este cartão para novos lançamentos', style: TextStyle(fontSize: 11)),
+                    value: _ativo,
+                    activeThumbColor: AppColors.primary,
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (val) => setState(() => _ativo = val),
+                  ),
+                ],
+
+                const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -191,7 +240,10 @@ class _NovoCartaoDialogState extends State<NovoCartaoDialog> {
                               height: 16,
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                             )
-                          : const Text('Salvar Cartão', style: TextStyle(fontWeight: FontWeight.bold)),
+                          : Text(
+                              _isEdicao ? 'Salvar Alterações' : 'Salvar Cartão',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
                     ),
                   ],
                 ),

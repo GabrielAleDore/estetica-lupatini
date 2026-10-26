@@ -91,4 +91,14 @@ class ContasBancariasRepository {
       throw Exception('Erro ao inativar/excluir conta bancária: $e');
     }
   }
+
+  /// Reconcilia e recalcula o saldo atual da conta bancária com base em todos os lançamentos
+  Future<double> reconciliarSaldo(String id) async {
+    try {
+      final res = await _supabase.rpc('reconciliar_saldo_conta_bancaria', params: {'p_conta_id': id});
+      return (res as num?)?.toDouble() ?? 0.0;
+    } catch (e) {
+      throw Exception('Erro ao reconciliar saldo da conta bancária: $e');
+    }
+  }
 }

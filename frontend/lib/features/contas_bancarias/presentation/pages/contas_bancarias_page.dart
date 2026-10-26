@@ -127,6 +127,44 @@ class _ContasBancariasView extends StatelessWidget {
     );
   }
 
+  void _confirmarReconciliarConta(BuildContext context, ContaBancariaModel conta) {
+    final cubit = context.read<ContasBancariasCubit>();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.sync, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text('Reconciliar Saldo Bancário', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Deseja recalcular e conciliar o saldo da conta "${conta.nomeConta}" com base em todos os lançamentos de receitas e despesas vinculados a ela?\n\n'
+          'Saldo Atual exibido: ${NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$').format(conta.saldoAtual)}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.sync, size: 16),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              cubit.reconciliarSaldo(conta.id);
+            },
+            label: const Text('Reconciliar Agora'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currencyFormat = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
@@ -228,45 +266,33 @@ class _ContasBancariasView extends StatelessWidget {
   }
 
   Widget _buildKpiCards(BuildContext context, ContasBancariasState state, NumberFormat currencyFormat) {
+    final contasAtivas = state.contas.where((c) => c.ativo).length;
     return Row(
       children: [
         Expanded(
+          flex: 2,
           child: _buildKpiCard(
-            titulo: 'Saldo Total PJ (Clínica)',
-            valor: currencyFormat.format(state.saldoTotalPj),
-            subtitulo: '${state.totalPjCount} contas operacionais ativas',
-            corIcone: AppColors.primary,
-            icone: Icons.business,
-            backgroundGradiente: [
-              AppColors.primaryLight.withValues(alpha: 0.15),
-              Colors.white,
-            ],
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _buildKpiCard(
-            titulo: 'Saldo Total PF (Pessoal/Sócios)',
-            valor: currencyFormat.format(state.saldoTotalPf),
-            subtitulo: '${state.totalPfCount} contas de sócios ativas',
-            corIcone: const Color(0xFF6D4C41),
-            icone: Icons.person,
-            backgroundGradiente: [
-              const Color(0xFFEFEBE9),
-              Colors.white,
-            ],
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _buildKpiCard(
-            titulo: 'Saldo Consolidado Total',
+            titulo: 'Saldo Total Consolidado',
             valor: currencyFormat.format(state.saldoTotalGeral),
-            subtitulo: '${state.contas.where((c) => c.ativo).length} contas bancárias ativas no total',
+            subtitulo: 'Soma do saldo disponível em todas as contas cadastradas',
             corIcone: Colors.green.shade700,
             icone: Icons.account_balance,
             backgroundGradiente: [
               Colors.green.shade50,
+              Colors.white,
+            ],
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: _buildKpiCard(
+            titulo: 'Contas Bancárias Ativas',
+            valor: '$contasAtivas contas',
+            subtitulo: 'Prontas para recebimentos e despesas',
+            corIcone: AppColors.primary,
+            icone: Icons.account_balance_wallet_outlined,
+            backgroundGradiente: [
+              AppColors.primaryLight.withValues(alpha: 0.15),
               Colors.white,
             ],
           ),
@@ -347,20 +373,14 @@ class _ContasBancariasView extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Botões de Segmentação por Escopo
         Row(
           children: [
-            _buildTabFilterButton('TODOS', 'Todas as Contas', state.filtroEscopo == 'TODOS', () {
-              cubit.mudarFiltroEscopo('TODOS');
-            }),
+            const Icon(Icons.account_balance_outlined, size: 18, color: AppColors.primary),
             const SizedBox(width: 8),
-            _buildTabFilterButton('PJ', 'Contas PJ (Clínica)', state.filtroEscopo == 'PJ', () {
-              cubit.mudarFiltroEscopo('PJ');
-            }),
-            const SizedBox(width: 8),
-            _buildTabFilterButton('PF', 'Contas PF (Pessoal)', state.filtroEscopo == 'PF', () {
-              cubit.mudarFiltroEscopo('PF');
-            }),
+            Text(
+              'Contas Cadastradas (${state.contasFiltradas.length})',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
           ],
         ),
 
@@ -382,30 +402,6 @@ class _ContasBancariasView extends StatelessWidget {
     );
   }
 
-  Widget _buildTabFilterButton(String chave, String label, bool isSelected, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : Colors.grey.shade300,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.white : AppColors.textPrimaryLight,
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildContaCard(BuildContext context, ContaBancariaModel conta, NumberFormat currencyFormat) {
     final corIdentificadora = _parseColor(conta.corIdentificadora);
@@ -448,29 +444,6 @@ class _ContasBancariasView extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Badge PJ vs PF
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: conta.isPj
-                        ? AppColors.primary.withValues(alpha: 0.12)
-                        : const Color(0xFF6D4C41).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: conta.isPj ? AppColors.primary : const Color(0xFF6D4C41),
-                      width: 1,
-                    ),
-                  ),
-                  child: Text(
-                    conta.escopo,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: conta.isPj ? AppColors.primary : const Color(0xFF6D4C41),
-                    ),
                   ),
                 ),
                 if (!conta.ativo) ...[
@@ -545,9 +518,20 @@ class _ContasBancariasView extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Saldo Atual em Conta',
-                        style: TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 4,
+                        children: [
+                          const Text(
+                            'Saldo Atual em Conta',
+                            style: TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
+                          ),
+                          if (conta.saldoInicial > 0 && conta.saldoInicial != conta.saldoAtual)
+                            Text(
+                              '(Inicial: ${currencyFormat.format(conta.saldoInicial)})',
+                              style: const TextStyle(fontSize: 10, color: AppColors.textSecondaryLight),
+                            ),
+                        ],
                       ),
                       Text(
                         currencyFormat.format(conta.saldoAtual),
@@ -565,6 +549,13 @@ class _ContasBancariasView extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    IconButton(
+                      icon: const Icon(Icons.sync, size: 18, color: AppColors.primary),
+                      tooltip: 'Reconciliar Saldo com Transações',
+                      constraints: const BoxConstraints(),
+                      padding: const EdgeInsets.all(6),
+                      onPressed: () => _confirmarReconciliarConta(context, conta),
+                    ),
                     IconButton(
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       tooltip: 'Editar Conta',

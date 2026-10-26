@@ -34,18 +34,20 @@ class DashboardCubit extends Cubit<DashboardState> {
       final vendasEfetivadas = double.tryParse(resumo['vendas_efetivadas']?.toString() ?? '0') ?? faturadoPjBase;
       final vendasAReceber = double.tryParse(resumo['vendas_a_receber']?.toString() ?? '0') ?? 0.0;
 
-      // Dados de receitas avulsas manuais
+      // Dados de receitas avulsas manuais (todas as contas)
       final recAvulsasPJ = double.tryParse(receitasManuais['total_receitas_pj']?.toString() ?? '0') ?? 0.0;
       final recAvulsasPF = double.tryParse(receitasManuais['total_receitas_pf']?.toString() ?? '0') ?? 0.0;
+      final totalRecAvulsas = recAvulsasPJ + recAvulsasPF;
       final listaReceitas = (receitasManuais['transacoes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
-      // Faturamento PJ consolidado: Vendas PDV Efetivadas + Entradas Manuais Efetivadas PJ
-      final faturadoConsolidadoPj = faturadoPjBase + recAvulsasPJ;
-      final balancoConsolidado = balancoBase + recAvulsasPJ;
+      // A procedure do banco já inclui as receitas avulsas nos totais (fonte única da verdade)
+      final faturadoConsolidadoPj = faturadoPjBase;
+      final balancoConsolidado = balancoBase;
+      final vendasEfetivadasTotal = vendasEfetivadas;
 
       // Atualiza no DRE em memória
       dre['receita_liquida'] = faturadoConsolidadoPj;
-      dre['receitas_avulsas_pj'] = recAvulsasPJ;
+      dre['receitas_avulsas_pj'] = totalRecAvulsas;
 
       // Dados de liquidez bancária
       final saldoPJ = double.tryParse(resumoBancario['saldo_total_pj']?.toString() ?? '0') ?? 0.0;
@@ -64,7 +66,7 @@ class DashboardCubit extends Cubit<DashboardState> {
         totalFaturadoPj: faturadoConsolidadoPj,
         totalDespesasPf: despesasPf,
         balancoLiquido: balancoConsolidado,
-        vendasEfetivadas: vendasEfetivadas,
+        vendasEfetivadas: vendasEfetivadasTotal,
         vendasAReceber: vendasAReceber,
         receitasAvulsasPJ: recAvulsasPJ,
         receitasAvulsasPF: recAvulsasPF,

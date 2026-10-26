@@ -15,6 +15,8 @@ import '../contas_pagar/presentation/pages/contas_pagar_page.dart';
 import '../usuarios/presentation/pages/usuarios_page.dart';
 import '../agenda/presentation/pages/agenda_page.dart';
 import '../contas_bancarias/presentation/pages/contas_bancarias_page.dart';
+import '../operacoes/presentation/pages/cockpit_operacoes_page.dart';
+import '../estoque/presentation/pages/movimentacao_estoque_page.dart';
 
 class _NavDestinationItem {
   final String label;
@@ -65,7 +67,12 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     final target = MainNavigationShell.navigationTarget.value;
     if (target != null && mounted) {
       final destinos = _obterDestinosFiltrados(context.read<AuthCubit>().state.usuario?.role ?? '');
-      final idx = destinos.indexWhere((d) => d.label.toLowerCase().contains(target.toLowerCase()));
+      String query = target.toLowerCase();
+      if (query.contains('vendas')) query = 'receitas';
+      if (query.contains('pagar')) query = 'despesas';
+      if (query.contains('estoque')) query = 'movimentação de estoque';
+      if (query.contains('cockpit') || query.contains('operaç') || query.contains('inicio') || query.contains('início')) query = 'início';
+      final idx = destinos.indexWhere((d) => d.label.toLowerCase().contains(query));
       if (idx != -1) {
         setState(() => _currentIndex = idx);
       }
@@ -75,6 +82,13 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
 
   // Catálogo completo de destinos e suas restrições de RBAC
   static const List<_NavDestinationItem> _todosDestinos = [
+    _NavDestinationItem(
+      label: 'Início',
+      icon: Icons.home_outlined,
+      selectedIcon: Icons.home,
+      page: CockpitOperacoesPage(),
+      rolesPermitidas: ['ADMIN', 'RECEPCAO', 'ATENDIMENTO'],
+    ),
     _NavDestinationItem(
       label: 'Dashboard',
       icon: Icons.dashboard_outlined,
@@ -97,14 +111,14 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       rolesPermitidas: ['ADMIN', 'RECEPCAO', 'ATENDIMENTO'],
     ),
     _NavDestinationItem(
-      label: 'Movimentações de Vendas',
+      label: 'Registro de Receitas',
       icon: Icons.receipt_long_outlined,
       selectedIcon: Icons.receipt_long,
       page: MovimentacoesVendasPage(),
       rolesPermitidas: ['ADMIN', 'RECEPCAO'],
     ),
     _NavDestinationItem(
-      label: 'Contas a Pagar',
+      label: 'Registro de Despesas',
       icon: Icons.account_balance_wallet_outlined,
       selectedIcon: Icons.account_balance_wallet,
       page: ContasPagarPage(),
@@ -132,6 +146,13 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       rolesPermitidas: ['ADMIN', 'RECEPCAO'],
     ),
     _NavDestinationItem(
+      label: 'Movimentação de Estoque',
+      icon: Icons.swap_horiz_outlined,
+      selectedIcon: Icons.swap_horiz,
+      page: MovimentacaoEstoquePage(),
+      rolesPermitidas: ['ADMIN', 'RECEPCAO'],
+    ),
+    _NavDestinationItem(
       label: 'Contas Bancárias',
       icon: Icons.account_balance_outlined,
       selectedIcon: Icons.account_balance,
@@ -148,10 +169,8 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
   ];
 
   List<_NavDestinationItem> _obterDestinosFiltrados(String role) {
-    if (role.toUpperCase() == 'MESTRE') {
-      return _todosDestinos
-          .where((item) => item.label == 'Gestão de Usuários' || item.label == 'Contas Bancárias')
-          .toList();
+    if (role.toUpperCase() == 'ADMIN' || role.toUpperCase() == 'MESTRE') {
+      return _todosDestinos;
     }
     return _todosDestinos
         .where((item) => item.rolesPermitidas.contains(role.toUpperCase()))
@@ -218,7 +237,12 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
 
         // Garante que o índice atual é válido para os destinos permitidos
         final activeIndex = _currentIndex >= destinos.length ? 0 : _currentIndex;
-        final currentPage = destinos.isNotEmpty ? destinos[activeIndex].page : const SizedBox.shrink();
+        final pagesWidget = destinos.isNotEmpty
+            ? IndexedStack(
+                index: activeIndex,
+                children: destinos.map((d) => d.page).toList(),
+              )
+            : const SizedBox.shrink();
 
         return ResponsiveLayout(
           desktop: Scaffold(
@@ -355,7 +379,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
                   }).toList(),
                 ),
                 const VerticalDivider(thickness: 1, width: 1, color: AppColors.borderLight),
-                Expanded(child: currentPage),
+                Expanded(child: pagesWidget),
               ],
             ),
           ),
@@ -499,7 +523,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
                 ],
               ),
             ),
-            body: currentPage,
+            body: pagesWidget,
             bottomNavigationBar: destinos.length <= 5 && destinos.length > 1
                 ? NavigationBar(
                     backgroundColor: Colors.white,

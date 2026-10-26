@@ -186,12 +186,20 @@ class VendasCubit extends Cubit<VendasState> {
     ));
   }
 
+  void selecionarContaBancaria(String? contaId) {
+    emit(state.copyWith(
+      contaBancariaId: contaId,
+      clearContaBancaria: contaId == null,
+    ));
+  }
+
   void limparCarrinho() {
     emit(state.copyWith(
       itensCarrinho: const [],
       desconto: 0.0,
       tipoDesconto: 'NENHUM',
       clearCliente: true,
+      clearContaBancaria: true,
       formaPagamento: 'PIX',
       parcelas: 1,
     ));
@@ -232,6 +240,7 @@ class VendasCubit extends Cubit<VendasState> {
         dataPrevistaPagamento: state.dataPrevistaPagamento,
         cartaoId: state.cartaoId,
         parcelas: state.parcelas,
+        contaBancariaId: state.contaBancariaId,
         observacoes: observacoes,
         itens: state.itensCarrinho,
       );

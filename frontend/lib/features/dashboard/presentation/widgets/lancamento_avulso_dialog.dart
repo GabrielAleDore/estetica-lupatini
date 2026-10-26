@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/utils/moeda_input_formatter.dart';
 
 class LancamentoAvulsoDialog extends StatefulWidget {
   final Future<bool> Function(Map<String, dynamic> dados) onSalvar;
@@ -21,7 +22,7 @@ class _LancamentoAvulsoDialogState extends State<LancamentoAvulsoDialog> {
   );
 
   String _tipo = 'SAIDA'; // 'SAIDA' (Despesa) ou 'ENTRADA' (Receita)
-  String _escopo = 'PJ'; // 'PJ' (Clínica) ou 'PF' (Sócios)
+  final String _escopo = 'PJ'; // Default retrocompatível com schema
   bool _isSalvando = false;
 
   @override
@@ -37,7 +38,7 @@ class _LancamentoAvulsoDialogState extends State<LancamentoAvulsoDialog> {
 
     setState(() => _isSalvando = true);
 
-    final valor = double.parse(_valorController.text.trim().replaceAll(',', '.'));
+    final valor = MoedaInputFormatter.parse(_valorController.text);
     final dados = {
       'descricao': _descricaoController.text.trim(),
       'tipo': _tipo,
@@ -56,7 +57,6 @@ class _LancamentoAvulsoDialogState extends State<LancamentoAvulsoDialog> {
   @override
   Widget build(BuildContext context) {
     final isSaida = _tipo == 'SAIDA';
-    final isPj = _escopo == 'PJ';
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -148,27 +148,6 @@ class _LancamentoAvulsoDialogState extends State<LancamentoAvulsoDialog> {
                 ),
                 const SizedBox(height: 14),
 
-                // Seletor Escopo (PJ Clínica vs PF Sócios)
-                DropdownButtonFormField<String>(
-                  initialValue: _escopo,
-                  decoration: const InputDecoration(
-                    labelText: 'Regime / Escopo *',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.shield_outlined),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'PJ',
-                      child: Text('Clínica (PJ) - Custos Operacionais, Aluguel, Fornecedores'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'PF',
-                      child: Text('Pessoal dos Sócios (PF) - Retirada ou Gasto Particular'),
-                    ),
-                  ],
-                  onChanged: (v) => setState(() => _escopo = v!),
-                ),
-                const SizedBox(height: 14),
 
                 TextFormField(
                   controller: _descricaoController,
@@ -188,15 +167,19 @@ class _LancamentoAvulsoDialogState extends State<LancamentoAvulsoDialog> {
                       child: TextFormField(
                         controller: _valorController,
                         keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          MoedaInputFormatter(),
+                        ],
                         decoration: const InputDecoration(
                           labelText: 'Valor Total (R\$) *',
-                          hintText: 'Ex: 350.00',
+                          hintText: '0,00',
                           prefixIcon: Icon(Icons.attach_money),
+                          prefixText: 'R\$ ',
                           border: OutlineInputBorder(),
                         ),
                         validator: (v) {
-                          final n = double.tryParse((v ?? '').replaceAll(',', '.'));
-                          if (n == null || n <= 0) return 'Valor inválido';
+                          final n = MoedaInputFormatter.parse(v);
+                          if (n <= 0) return 'Informe um valor válido.';
                           return null;
                         },
                       ),
@@ -228,7 +211,7 @@ class _LancamentoAvulsoDialogState extends State<LancamentoAvulsoDialog> {
                     ElevatedButton(
                       onPressed: _isSalvando ? null : _submeter,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isSaida ? (isPj ? AppColors.pjClinical : AppColors.primary) : AppColors.success,
+                        backgroundColor: isSaida ? AppColors.error : AppColors.success,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       ),
                       child: _isSalvando

@@ -5,7 +5,8 @@ import 'vendas_historico_state.dart';
 
 class VendasHistoricoCubit extends Cubit<VendasHistoricoState> {
   final VendasHistoricoRepository _repository;
-  StreamSubscription? _streamSubscription;
+  StreamSubscription? _streamSubscriptionVendas;
+  StreamSubscription? _streamSubscriptionTransacoes;
 
   VendasHistoricoCubit({VendasHistoricoRepository? repository})
       : _repository = repository ?? VendasHistoricoRepository(),
@@ -14,8 +15,12 @@ class VendasHistoricoCubit extends Cubit<VendasHistoricoState> {
   }
 
   void _iniciarRealtime() {
-    _streamSubscription?.cancel();
-    _streamSubscription = _repository.streamVendas().listen((_) {
+    _streamSubscriptionVendas?.cancel();
+    _streamSubscriptionVendas = _repository.streamVendas().listen((_) {
+      carregarVendas(silencioso: true);
+    });
+    _streamSubscriptionTransacoes?.cancel();
+    _streamSubscriptionTransacoes = _repository.streamTransacoes().listen((_) {
       carregarVendas(silencioso: true);
     });
   }
@@ -76,9 +81,9 @@ class VendasHistoricoCubit extends Cubit<VendasHistoricoState> {
     carregarVendas();
   }
 
-  Future<bool> liquidarVendaPendente(String vendaId, String formaPagamento) async {
+  Future<bool> liquidarVendaPendente(String vendaId, String formaPagamento, {String? contaBancariaId}) async {
     try {
-      await _repository.darBaixaVenda(vendaId, formaPagamento);
+      await _repository.darBaixaVenda(vendaId, formaPagamento, contaBancariaId: contaBancariaId);
       emit(state.copyWith(successMessage: 'Venda liquidada com sucesso!'));
       await carregarVendas();
       return true;
@@ -102,7 +107,8 @@ class VendasHistoricoCubit extends Cubit<VendasHistoricoState> {
 
   @override
   Future<void> close() {
-    _streamSubscription?.cancel();
+    _streamSubscriptionVendas?.cancel();
+    _streamSubscriptionTransacoes?.cancel();
     return super.close();
   }
 }

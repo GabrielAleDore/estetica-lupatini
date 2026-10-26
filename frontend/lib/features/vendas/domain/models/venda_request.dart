@@ -6,6 +6,7 @@ class VendaRequest {
   final String tipoDesconto; // 'AVULSO', 'PROMOCIONAL', 'FIDELIDADE', 'NENHUM'
   final String formaPagamento;
   final String? cartaoId;
+  final String? contaBancariaId;
   final int parcelas;
   final String? observacoes;
   final String statusPagamento; // 'EFETIVADO' ou 'PENDENTE'
@@ -18,6 +19,7 @@ class VendaRequest {
     this.tipoDesconto = 'NENHUM',
     required this.formaPagamento,
     this.cartaoId,
+    this.contaBancariaId,
     this.parcelas = 1,
     this.observacoes,
     this.statusPagamento = 'EFETIVADO',
@@ -32,6 +34,7 @@ class VendaRequest {
       'tipo_desconto': tipoDesconto,
       'forma_pagamento': formaPagamento,
       'cartao_id': cartaoId,
+      'conta_bancaria_id': contaBancariaId,
       'parcelas': parcelas,
       'observacoes': observacoes,
       'status_pagamento': statusPagamento,

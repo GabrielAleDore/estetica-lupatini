@@ -30,8 +30,13 @@ class ContasBancariasState extends Equatable {
       .where((c) => c.isPf && c.ativo)
       .fold(0.0, (sum, c) => sum + c.saldoAtual);
 
-  /// Saldo Total Consolidado
-  double get saldoTotalGeral => saldoTotalPj + saldoTotalPf;
+  /// Saldo Total Consolidado de todas as contas ativas
+  double get saldoTotalGeral => contas
+      .where((c) => c.ativo)
+      .fold(0.0, (sum, c) => sum + c.saldoAtual);
+
+  /// Quantidade total de contas ativas
+  int get contasAtivasCount => contas.where((c) => c.ativo).length;
 
   /// Lista de contas filtradas pela visualização atual
   List<ContaBancariaModel> get contasFiltradas {

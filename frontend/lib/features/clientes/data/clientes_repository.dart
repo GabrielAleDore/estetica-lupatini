@@ -19,34 +19,38 @@ class ClientesRepository {
       final response = await query.order('nome').limit(100);
       final List<Map<String, dynamic>> clientes = List<Map<String, dynamic>>.from(response);
 
-      try {
-        final vendasRes = await _supabase
-            .from('vendas')
-            .select('cliente_id, valor_liquido')
-            .eq('status', 'CONCLUIDA');
+      if (clientes.isNotEmpty) {
+        try {
+          final clientIds = clientes.map((c) => c['id'] as String).toList();
+          final vendasRes = await _supabase
+              .from('vendas')
+              .select('cliente_id, valor_liquido')
+              .eq('status', 'CONCLUIDA')
+              .inFilter('cliente_id', clientIds);
 
-        final Map<String, double> totaisGastos = {};
-        final Map<String, int> contagemVendas = {};
+          final Map<String, double> totaisGastos = {};
+          final Map<String, int> contagemVendas = {};
 
-        for (final v in vendasRes) {
-          final cid = v['cliente_id'] as String?;
-          if (cid != null) {
-            final val = (v['valor_liquido'] as num?)?.toDouble() ?? 0.0;
-            totaisGastos[cid] = (totaisGastos[cid] ?? 0.0) + val;
-            contagemVendas[cid] = (contagemVendas[cid] ?? 0) + 1;
+          for (final v in vendasRes) {
+            final cid = v['cliente_id'] as String?;
+            if (cid != null) {
+              final val = (v['valor_liquido'] as num?)?.toDouble() ?? 0.0;
+              totaisGastos[cid] = (totaisGastos[cid] ?? 0.0) + val;
+              contagemVendas[cid] = (contagemVendas[cid] ?? 0) + 1;
+            }
           }
-        }
 
-        for (var i = 0; i < clientes.length; i++) {
-          final cid = clientes[i]['id'] as String;
-          clientes[i] = {
-            ...clientes[i],
-            'total_gasto': totaisGastos[cid] ?? 0.0,
-            'total_compras': contagemVendas[cid] ?? 0,
-          };
+          for (var i = 0; i < clientes.length; i++) {
+            final cid = clientes[i]['id'] as String;
+            clientes[i] = {
+              ...clientes[i],
+              'total_gasto': totaisGastos[cid] ?? 0.0,
+              'total_compras': contagemVendas[cid] ?? 0,
+            };
+          }
+        } catch (_) {
+          // Prossegue mesmo se a agregação de vendas sofrer timeout
         }
-      } catch (_) {
-        // Prossegue mesmo se a agregação de vendas sofrer timeout
       }
 
       return clientes;

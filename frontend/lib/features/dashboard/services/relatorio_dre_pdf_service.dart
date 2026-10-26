@@ -67,17 +67,13 @@ class RelatorioDrePdfService {
     final despVariaveisPj = (dados['despesas_variaveis_pj'] as num?)?.toDouble() ?? 0.0;
     final totalDespesasPj = (dados['despesas_pj_total'] as num?)?.toDouble() ?? (despFixasPj + despVariaveisPj);
     final lucroOperacional = (dados['lucro_operacional_liquido'] as num?)?.toDouble() ?? (recLiquida - custoInsumos - totalDespesasPj);
-    final retiradasPf = (dados['retiradas_pf'] as num?)?.toDouble() ?? 0.0;
-
     final detalheDespesas = (dados['detalhe_despesas'] as List?) ?? [];
-    final detalheRetiradas = (dados['detalhe_retiradas'] as List?) ?? [];
 
     // Cores temáticas para PDF
     final primaryColor = PdfColor.fromHex('#588157');
     final darkColor = PdfColor.fromHex('#344E41');
     final lightColor = PdfColor.fromHex('#F4F7F4');
     final errorColor = PdfColor.fromHex('#C53030');
-    final warningColor = PdfColor.fromHex('#DD6B20');
 
     doc.addPage(
       pw.MultiPage(
@@ -138,7 +134,7 @@ class RelatorioDrePdfService {
 
             // Tabela Principal de DRE Estruturado
             pw.Text(
-              '1. ESTRUTURA CONTÁBIL E OPERACIONAL (PJ)',
+              '1. ESTRUTURA CONTÁBIL E OPERACIONAL',
               style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: darkColor),
             ),
             pw.SizedBox(height: 8),
@@ -192,21 +188,21 @@ class RelatorioDrePdfService {
                 ),
                 _buildDreRow(
                   codigo: '(-)',
-                  descricao: 'Despesas Operacionais Fixas PJ (Aluguel, Energia, Água, Salários)',
+                  descricao: 'Despesas Operacionais Fixas (Aluguel, Energia, Água, Salários)',
                   valor: -despFixasPj,
                   isNegative: true,
                   primaryColor: primaryColor,
                 ),
                 _buildDreRow(
                   codigo: '(-)',
-                  descricao: 'Despesas Variáveis PJ (Taxas de Cartão, Reposição, Insumos Avulsos)',
+                  descricao: 'Despesas Variáveis (Taxas de Cartão, Reposição, Insumos Avulsos)',
                   valor: -despVariaveisPj,
                   isNegative: true,
                   primaryColor: primaryColor,
                 ),
                 _buildDreRow(
                   codigo: '(=)',
-                  descricao: 'LUCRO / PREJUÍZO OPERACIONAL LÍQUIDO (PJ)',
+                  descricao: 'LUCRO / PREJUÍZO OPERACIONAL LÍQUIDO',
                   valor: lucroOperacional,
                   isBold: true,
                   bgColor: lucroOperacional >= 0 ? PdfColor.fromHex('#E8F5E9') : PdfColor.fromHex('#FFEBEE'),
@@ -217,37 +213,10 @@ class RelatorioDrePdfService {
             ),
             pw.SizedBox(height: 24),
 
-            // Seção Informativa Separada: PF
-            pw.Text(
-              '2. SEÇÃO INFORMATIVA SEPARADA: RETIRADAS / DESPESAS PESSOAIS (PF)',
-              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: warningColor),
-            ),
-            pw.SizedBox(height: 4),
-            pw.Text(
-              '* Conforme boas práticas de governança híbrida, os gastos dos sócios (PF) não impactam o lucro operacional da pessoa jurídica, constando apenas para controle de retiradas.',
-              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
-            ),
-            pw.SizedBox(height: 8),
-
-            pw.Table(
-              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-              children: [
-                _buildDreRow(
-                  codigo: '(*)',
-                  descricao: 'Total de Retiradas e Despesas Pessoais dos Sócios (PF)',
-                  valor: retiradasPf,
-                  isBold: true,
-                  bgColor: PdfColor.fromHex('#FFFBEB'),
-                  primaryColor: primaryColor,
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 20),
-
-            // Detalhamento de Despesas PJ Pagas no Mês
+            // Detalhamento de Despesas Operacionais Pagas no Mês
             if (detalheDespesas.isNotEmpty) ...[
               pw.Text(
-                '3. DISCRIMINAÇÃO DAS DESPESAS OPERACIONAIS PJ PAGAS',
+                '2. DISCRIMINAÇÃO DAS DESPESAS OPERACIONAIS PAGAS',
                 style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: darkColor),
               ),
               pw.SizedBox(height: 6),
@@ -257,37 +226,12 @@ class RelatorioDrePdfService {
                 headerDecoration: pw.BoxDecoration(color: darkColor),
                 cellStyle: const pw.TextStyle(fontSize: 9),
                 cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                headers: ['Descrição da Despesa PJ', 'Tipo de Recorrência', 'Valor (R\$)'],
+                headers: ['Descrição da Despesa', 'Tipo de Recorrência', 'Valor (R\$)'],
                 data: detalheDespesas.map((d) {
                   final valor = (d['valor'] as num?)?.toDouble() ?? 0.0;
                   return [
                     d['descricao'] ?? '',
                     d['tipo_recorrencia'] ?? 'AVULSA',
-                    _currencyFormat.format(valor),
-                  ];
-                }).toList(),
-              ),
-              pw.SizedBox(height: 20),
-            ],
-
-            // Detalhamento de Retiradas PF
-            if (detalheRetiradas.isNotEmpty) ...[
-              pw.Text(
-                '4. DISCRIMINAÇÃO DE RETIRADAS DOS SÓCIOS (PF)',
-                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: warningColor),
-              ),
-              pw.SizedBox(height: 6),
-              pw.TableHelper.fromTextArray(
-                border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-                headerStyle: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-                headerDecoration: pw.BoxDecoration(color: warningColor),
-                cellStyle: const pw.TextStyle(fontSize: 9),
-                cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                headers: ['Descrição do Gasto / Retirada', 'Valor (R\$)'],
-                data: detalheRetiradas.map((r) {
-                  final valor = (r['valor'] as num?)?.toDouble() ?? 0.0;
-                  return [
-                    r['descricao'] ?? '',
                     _currencyFormat.format(valor),
                   ];
                 }).toList(),

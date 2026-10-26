@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/utils/forma_pagamento_util.dart';
 import '../cubit/vendas_historico_cubit.dart';
 import '../cubit/vendas_historico_state.dart';
 import '../../../dashboard/data/dashboard_repository.dart';
@@ -71,8 +72,10 @@ class _MovimentacoesVendasViewState extends State<_MovimentacoesVendasView> {
                 context.read<DashboardCubit>().carregarDashboard();
               } catch (_) {}
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Entrada avulsa / Receita registrada e creditada com sucesso!'),
+                SnackBar(
+                  content: Text(dados['is_transferencia'] == true
+                      ? 'Transferência entre contas realizada com sucesso!'
+                      : 'Entrada avulsa / Receita registrada e creditada com sucesso!'),
                   backgroundColor: AppColors.success,
                 ),
               );
@@ -93,8 +96,9 @@ class _MovimentacoesVendasViewState extends State<_MovimentacoesVendasView> {
 
   void _abrirModalRecebimento(BuildContext context, Map<String, dynamic> venda) {
     String formaSelecionada = 'PIX';
+    String? contaSelecionada = venda['conta_bancaria_id']?.toString();
     final vendaId = venda['id'] as String;
-    final valorLiquido = (venda['valor_liquido'] as num?)?.toDouble() ?? 0.0;
+    final valorLiquido = (venda['valor_liquido'] as num?)?.toDouble() ?? (venda['valor_total'] as num?)?.toDouble() ?? 0.0;
     final cliente = venda['clientes'] as Map<String, dynamic>?;
     final clienteNome = cliente?['nome'] ?? 'Cliente';
 
@@ -102,6 +106,18 @@ class _MovimentacoesVendasViewState extends State<_MovimentacoesVendasView> {
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (context, setModalState) {
+          final contasAtivas = (() {
+            try {
+              return context.watch<ContasBancariasCubit>().state.contas.where((c) => c.ativo).toList();
+            } catch (_) {
+              return const [];
+            }
+          })();
+
+          if (contaSelecionada == null && contasAtivas.isNotEmpty) {
+            contaSelecionada = contasAtivas.first.id;
+          }
+
           return AlertDialog(
             title: const Row(
               children: [
@@ -110,34 +126,61 @@ class _MovimentacoesVendasViewState extends State<_MovimentacoesVendasView> {
                 Text('Dar Baixa / Receber Venda', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ],
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Paciente: $clienteNome', style: const TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
-                Text(
-                  'Valor a Receber: ${_currencyFormat.format(valorLiquido)}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.success),
-                ),
-                const SizedBox(height: 16),
-                const Text('Selecione a forma como o pagamento foi recebido:', style: TextStyle(fontSize: 13)),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: formaSelecionada,
-                  decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
-                  items: const [
-                    DropdownMenuItem(value: 'PIX', child: Text('PIX')),
-                    DropdownMenuItem(value: 'DINHEIRO', child: Text('Dinheiro em Espécie')),
-                    DropdownMenuItem(value: 'CARTAO_DEBITO', child: Text('Cartão de Débito')),
-                    DropdownMenuItem(value: 'CARTAO_CREDITO', child: Text('Cartão de Crédito')),
-                    DropdownMenuItem(value: 'TRANSFERENCIA', child: Text('Transferência Bancária')),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Paciente: $clienteNome', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Valor a Receber: ${_currencyFormat.format(valorLiquido)}',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.success),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Forma de Pagamento:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    initialValue: formaSelecionada,
+                    decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+                    items: const [
+                      DropdownMenuItem(value: 'PIX', child: Text('PIX')),
+                      DropdownMenuItem(value: 'DINHEIRO', child: Text('Dinheiro em Espécie')),
+                      DropdownMenuItem(value: 'CARTAO_DEBITO', child: Text('Cartão de Débito')),
+                      DropdownMenuItem(value: 'CARTAO_CREDITO', child: Text('Cartão de Crédito')),
+                      DropdownMenuItem(value: 'TRANSFERENCIA', child: Text('Transferência Bancária')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setModalState(() => formaSelecionada = val);
+                    },
+                  ),
+                  if (contasAtivas.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Text('Creditar na Conta Bancária:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String?>(
+                      isExpanded: true,
+                      initialValue: contaSelecionada,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.account_balance),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('Sem vínculo direto com conta')),
+                        ...contasAtivas.map(
+                          (c) => DropdownMenuItem(
+                            value: c.id,
+                            child: Text('${c.nomeConta} (${c.bancoNome})', overflow: TextOverflow.ellipsis),
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) => setModalState(() => contaSelecionada = val),
+                    ),
                   ],
-                  onChanged: (val) {
-                    if (val != null) setModalState(() => formaSelecionada = val);
-                  },
-                ),
-              ],
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -147,13 +190,24 @@ class _MovimentacoesVendasViewState extends State<_MovimentacoesVendasView> {
               ElevatedButton(
                 onPressed: () async {
                   final messenger = ScaffoldMessenger.of(context);
-                  Navigator.of(dialogCtx).pop();
                   final cubit = context.read<VendasHistoricoCubit>();
-                  final ok = await cubit.liquidarVendaPendente(vendaId, formaSelecionada);
-                  if (ok && mounted) {
+                  ContasBancariasCubit? bCubit;
+                  try {
+                    bCubit = context.read<ContasBancariasCubit>();
+                  } catch (_) {}
+                  Navigator.of(dialogCtx).pop();
+                  final ok = await cubit.liquidarVendaPendente(
+                    vendaId,
+                    formaSelecionada,
+                    contaBancariaId: contaSelecionada,
+                  );
+                  if (ok) {
+                    try {
+                      bCubit?.carregarContas();
+                    } catch (_) {}
                     messenger.showSnackBar(
                       const SnackBar(
-                        content: Text('Venda liquidada com sucesso! Receita registrada no caixa.'),
+                        content: Text('Venda liquidada com sucesso! Saldo creditado na conta.'),
                         backgroundColor: AppColors.success,
                       ),
                     );
@@ -399,12 +453,12 @@ class _MovimentacoesVendasViewState extends State<_MovimentacoesVendasView> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Movimentações de Vendas & Contas a Receber',
+                          'Registro de Receitas',
                           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Acompanhamento de atendimentos concluídos, vendas pagas e fiado a receber',
+                          'Acompanhamento de atendimentos concluídos, vendas faturadas, entradas avulsas e fiado a receber',
                           style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                         ),
                       ],
@@ -507,7 +561,7 @@ class _MovimentacoesVendasViewState extends State<_MovimentacoesVendasView> {
                 ),
                 const SizedBox(height: 16),
 
-                // Lista de Vendas
+                // Tabela de Receitas em Formato de Linhas e Colunas
                 Expanded(
                   child: state.status == HistoricoStatus.loading
                       ? const Center(child: CircularProgressIndicator())
@@ -518,85 +572,199 @@ class _MovimentacoesVendasViewState extends State<_MovimentacoesVendasView> {
                                 children: [
                                   Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade400),
                                   const SizedBox(height: 12),
-                                  const Text('Nenhuma venda encontrada para os filtros selecionados.',
-                                      style: TextStyle(color: Colors.grey, fontSize: 14)),
+                                  const Text(
+                                    'Nenhuma venda encontrada para os filtros selecionados.',
+                                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                                  ),
                                 ],
                               ),
                             )
-                          : ListView.separated(
-                              itemCount: state.vendas.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 10),
-                              itemBuilder: (context, index) {
-                                final v = state.vendas[index];
-                                final cliente = v['clientes'] as Map<String, dynamic>?;
-                                final itens = v['itens_venda'] as List? ?? [];
-                                final isPendente = v['status_pagamento'] == 'PENDENTE';
-                                final isCancelada = v['status'] == 'CANCELADA';
-                                final dataHora = DateTime.tryParse(v['data_hora'] ?? '') ?? DateTime.now();
-                                final dataPrevista = v['data_prevista_pagamento'];
-
-                                // Resumo dos itens
-                                final resumoItens = itens.map((it) {
-                                  final prod = it['produtos'] as Map<String, dynamic>?;
-                                  final serv = it['servicos'] as Map<String, dynamic>?;
-                                  final nome = prod?['nome'] ?? serv?['nome'] ?? 'Item';
-                                  final qtd = (it['quantidade'] as num?)?.toDouble() ?? 1.0;
-                                  return '${qtd.toStringAsFixed(0)}x $nome';
-                                }).join(', ');
-
-                                return Card(
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    side: BorderSide(
-                                      color: isPendente ? Colors.amber.shade300 : AppColors.borderLight,
-                                      width: isPendente ? 1.5 : 1.0,
+                          : Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppColors.borderLight),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: Column(
+                                children: [
+                                  // Cabeçalho das Colunas
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade50,
+                                      border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                                    ),
+                                    child: const Row(
+                                      children: [
+                                        SizedBox(
+                                          width: 125,
+                                          child: Text('DATA / HORA', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
+                                        ),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          flex: 3,
+                                          child: Text('PACIENTE / CLIENTE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
+                                        ),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          flex: 4,
+                                          child: Text('ITENS / PROCEDIMENTOS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
+                                        ),
+                                        SizedBox(width: 8),
+                                        SizedBox(
+                                          width: 95,
+                                          child: Text('PAGAMENTO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
+                                        ),
+                                        SizedBox(width: 8),
+                                        SizedBox(
+                                          width: 110,
+                                          child: Text('VALOR', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey)),
+                                        ),
+                                        SizedBox(width: 8),
+                                        SizedBox(
+                                          width: 105,
+                                          child: Center(child: Text('STATUS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey))),
+                                        ),
+                                        SizedBox(width: 8),
+                                        SizedBox(
+                                          width: 120,
+                                          child: Center(child: Text('AÇÕES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey))),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  color: Colors.white,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
-                                      children: [
-                                        // Ícone de Status
-                                        CircleAvatar(
-                                          backgroundColor: isCancelada
-                                              ? Colors.grey.shade200
-                                              : isPendente
-                                                  ? Colors.amber.withValues(alpha: 0.15)
-                                                  : AppColors.success.withValues(alpha: 0.15),
-                                          child: Icon(
-                                            isCancelada
-                                                ? Icons.cancel_outlined
-                                                : isPendente
-                                                    ? Icons.schedule
-                                                    : Icons.check_circle_outline,
-                                            color: isCancelada
-                                                ? Colors.grey
-                                                : isPendente
-                                                    ? Colors.amber.shade800
-                                                    : AppColors.success,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 16),
 
-                                        // Informações Principais
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                  // Linhas de Registros
+                                  Expanded(
+                                    child: ListView.separated(
+                                      itemCount: state.vendas.length,
+                                      separatorBuilder: (_, __) => Divider(height: 1, thickness: 1, color: Colors.grey.shade100),
+                                      itemBuilder: (context, index) {
+                                        final v = state.vendas[index];
+                                        final cliente = v['clientes'] as Map<String, dynamic>?;
+                                        final itens = v['itens_venda'] as List? ?? [];
+                                        final isPendente = v['status_pagamento'] == 'PENDENTE';
+                                        final isCancelada = v['status'] == 'CANCELADA';
+                                        final dataHora = DateTime.tryParse(v['data_hora'] ?? '') ?? DateTime.now();
+                                        final dataPrevista = v['data_prevista_pagamento'];
+
+                                        // Resumo dos itens
+                                        final resumoItens = itens.map((it) {
+                                          final prod = it['produtos'] as Map<String, dynamic>?;
+                                          final serv = it['servicos'] as Map<String, dynamic>?;
+                                          final nome = prod?['nome'] ?? serv?['nome'] ?? 'Item';
+                                          final qtd = (it['quantidade'] as num?)?.toDouble() ?? 1.0;
+                                          return '${qtd.toStringAsFixed(0)}x $nome';
+                                        }).join(', ');
+
+                                        final valorOrig = (v['valor_original'] as num?)?.toDouble() ?? (v['valor_bruto'] as num?)?.toDouble() ?? 0.0;
+                                        final valorDesc = (v['valor_desconto'] as num?)?.toDouble() ?? (v['desconto'] as num?)?.toDouble() ?? 0.0;
+                                        final valorLiq = (v['valor_liquido'] as num?)?.toDouble() ?? (v['valor_final'] as num?)?.toDouble() ?? 0.0;
+
+                                        return Container(
+                                          color: isCancelada
+                                              ? Colors.grey.shade50.withValues(alpha: 0.5)
+                                              : (isPendente ? Colors.amber.shade50.withValues(alpha: 0.25) : Colors.white),
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                          child: Row(
                                             children: [
-                                              Row(
-                                                children: [
-                                                  Flexible(
-                                                    child: Text(
-                                                      cliente?['nome'] ?? 'Consumidor Final',
-                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                                      overflow: TextOverflow.ellipsis,
+                                              // Coluna 1: Data e Hora
+                                              SizedBox(
+                                                width: 125,
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      _dateFormat.format(dataHora),
+                                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                                                     ),
+                                                    if (isPendente && dataPrevista != null)
+                                                      Text(
+                                                        'Venc: $dataPrevista',
+                                                        style: TextStyle(fontSize: 10, color: Colors.amber.shade900),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+
+                                              // Coluna 2: Paciente / Cliente
+                                              Expanded(
+                                                flex: 3,
+                                                child: Text(
+                                                  cliente?['nome'] ?? 'Consumidor Final',
+                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+
+                                              // Coluna 3: Itens / Procedimentos
+                                              Expanded(
+                                                flex: 4,
+                                                child: Text(
+                                                  resumoItens.isEmpty ? 'Entrada Avulsa / Lançamento Direto' : resumoItens,
+                                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+
+                                              // Coluna 4: Forma Pagamento
+                                              SizedBox(
+                                                width: 95,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.grey.shade100,
+                                                    borderRadius: BorderRadius.circular(4),
                                                   ),
-                                                  const SizedBox(width: 8),
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                  child: Text(
+                                                    FormaPagamentoUtil.label((v['forma_pagamento'] ?? 'PIX').toString()),
+                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                                                    textAlign: TextAlign.center,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+
+                                              // Coluna 5: Valor
+                                              SizedBox(
+                                                width: 110,
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    if (valorDesc > 0)
+                                                      Text(
+                                                        _currencyFormat.format(valorOrig),
+                                                        style: const TextStyle(fontSize: 10, decoration: TextDecoration.lineThrough, color: Colors.grey),
+                                                      ),
+                                                    Text(
+                                                      _currencyFormat.format(valorLiq),
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: isCancelada
+                                                            ? Colors.grey
+                                                            : (isPendente ? Colors.amber.shade900 : AppColors.success),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+
+                                              // Coluna 6: Status
+                                              SizedBox(
+                                                width: 105,
+                                                child: Center(
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                     decoration: BoxDecoration(
                                                       color: isCancelada
                                                           ? Colors.grey.shade200
@@ -608,133 +776,88 @@ class _MovimentacoesVendasViewState extends State<_MovimentacoesVendasView> {
                                                     child: Text(
                                                       isCancelada
                                                           ? 'CANCELADA'
-                                                          : isPendente
-                                                              ? 'FIADO / PENDENTE'
-                                                              : 'PAGO',
+                                                          : (isPendente ? 'A RECEBER' : 'PAGO'),
                                                       style: TextStyle(
                                                         fontSize: 10,
                                                         fontWeight: FontWeight.bold,
                                                         color: isCancelada
-                                                          ? Colors.grey.shade700
-                                                          : isPendente
-                                                              ? Colors.amber.shade900
-                                                              : AppColors.success,
+                                                            ? Colors.grey.shade700
+                                                            : (isPendente ? Colors.amber.shade900 : AppColors.success),
                                                       ),
                                                     ),
                                                   ),
-                                                ],
+                                                ),
                                               ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                resumoItens.isEmpty ? 'Sem itens registrados' : resumoItens,
-                                                style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                'Realizada em: ${_dateFormat.format(dataHora)}${isPendente && dataPrevista != null ? '  •  Vencimento: $dataPrevista' : ''}',
-                                                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                              const SizedBox(width: 8),
+
+                                              // Coluna 7: Ações Rápidas
+                                              SizedBox(
+                                                width: 120,
+                                                child: FittedBox(
+                                                  fit: BoxFit.scaleDown,
+                                                  child: Row(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      if (isPendente && !isCancelada)
+                                                        IconButton(
+                                                          icon: const Icon(Icons.check_circle_outline, color: AppColors.success, size: 20),
+                                                          tooltip: 'Receber / Liquidar',
+                                                          padding: EdgeInsets.zero,
+                                                          visualDensity: VisualDensity.compact,
+                                                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                                          onPressed: () => _abrirModalRecebimento(context, v),
+                                                        ),
+                                                      if (isPendente && !isCancelada) const SizedBox(width: 4),
+                                                      IconButton(
+                                                        icon: const Icon(Icons.receipt_long_outlined, size: 18, color: AppColors.textSecondaryLight),
+                                                        tooltip: 'Recibo',
+                                                        padding: EdgeInsets.zero,
+                                                        visualDensity: VisualDensity.compact,
+                                                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                                        onPressed: () => _abrirComprovante(context, v),
+                                                      ),
+                                                      if (!isCancelada) ...[
+                                                        const SizedBox(width: 4),
+                                                        IconButton(
+                                                          icon: const Icon(Icons.cancel_outlined, size: 18, color: AppColors.error),
+                                                          tooltip: 'Cancelar',
+                                                          padding: EdgeInsets.zero,
+                                                          visualDensity: VisualDensity.compact,
+                                                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                                          onPressed: () async {
+                                                            final confirm = await showDialog<bool>(
+                                                              context: context,
+                                                              builder: (ctx) => AlertDialog(
+                                                                title: const Text('Cancelar Venda?'),
+                                                                content: const Text('Esta ação marcará a venda como cancelada.'),
+                                                                actions: [
+                                                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
+                                                                  ElevatedButton(
+                                                                    onPressed: () => Navigator.pop(ctx, true),
+                                                                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                                                                    child: const Text('Sim, Cancelar'),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            );
+                                                            if (confirm == true) {
+                                                              cubit.cancelarVenda(v['id']);
+                                                            }
+                                                          },
+                                                        ),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                ),
                                               ),
                                             ],
                                           ),
-                                        ),
-
-                                        // Comparativo Contábil: Subtotal Original, Desconto Total Aplicado, Total Pago
-                                        Builder(
-                                          builder: (context) {
-                                            final valorOrig = (v['valor_original'] as num?)?.toDouble() ?? (v['valor_bruto'] as num?)?.toDouble() ?? 0.0;
-                                            final valorDesc = (v['valor_desconto'] as num?)?.toDouble() ?? (v['desconto'] as num?)?.toDouble() ?? 0.0;
-                                            final valorLiq = (v['valor_liquido'] as num?)?.toDouble() ?? (v['valor_final'] as num?)?.toDouble() ?? 0.0;
-                                            final tipoDesc = v['tipo_desconto'] as String?;
-
-                                            return Column(
-                                              crossAxisAlignment: CrossAxisAlignment.end,
-                                              children: [
-                                                if (valorDesc > 0) ...[
-                                                  Text(
-                                                    'Orig: ${_currencyFormat.format(valorOrig)}',
-                                                    style: const TextStyle(fontSize: 10, decoration: TextDecoration.lineThrough, color: Colors.grey),
-                                                  ),
-                                                  Text(
-                                                    'Desc: -${_currencyFormat.format(valorDesc)}${tipoDesc != null && tipoDesc != 'NENHUM' ? ' ($tipoDesc)' : ''}',
-                                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.error),
-                                                  ),
-                                                ],
-                                                Text(
-                                                  _currencyFormat.format(valorLiq),
-                                                  style: TextStyle(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: isCancelada
-                                                        ? Colors.grey
-                                                        : isPendente
-                                                            ? Colors.amber.shade900
-                                                            : AppColors.primary,
-                                                  ),
-                                                ),
-                                                Text(
-                                                  v['forma_pagamento'] ?? 'PIX',
-                                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        ),
-                                        const SizedBox(width: 16),
-
-                                        // Ações Rápidas
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (isPendente && !isCancelada)
-                                              ElevatedButton.icon(
-                                                onPressed: () => _abrirModalRecebimento(context, v),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: AppColors.success,
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                ),
-                                                icon: const Icon(Icons.check, size: 14),
-                                                label: const Text('Receber', style: TextStyle(fontSize: 12)),
-                                              ),
-                                            IconButton(
-                                              icon: const Icon(Icons.receipt_outlined, size: 20),
-                                              tooltip: 'Ver Recibo',
-                                              onPressed: () => _abrirComprovante(context, v),
-                                            ),
-                                            if (!isCancelada)
-                                              IconButton(
-                                                icon: const Icon(Icons.cancel_outlined, size: 20, color: AppColors.error),
-                                                tooltip: 'Cancelar Venda',
-                                                onPressed: () async {
-                                                  final confirm = await showDialog<bool>(
-                                                    context: context,
-                                                    builder: (ctx) => AlertDialog(
-                                                      title: const Text('Cancelar Venda?'),
-                                                      content: const Text('Esta ação marcará a venda como cancelada.'),
-                                                      actions: [
-                                                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Não')),
-                                                        ElevatedButton(
-                                                          onPressed: () => Navigator.pop(ctx, true),
-                                                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-                                                          child: const Text('Sim, Cancelar'),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                  if (confirm == true) {
-                                                    cubit.cancelarVenda(v['id']);
-                                                  }
-                                                },
-                                              ),
-                                          ],
-                                        ),
-                                      ],
+                                        );
+                                      },
                                     ),
                                   ),
-                                );
-                              },
+                                ],
+                              ),
                             ),
                 ),
               ],

@@ -49,6 +49,11 @@ class ContaBancariaModel extends Equatable {
   }
 
   factory ContaBancariaModel.fromJson(Map<String, dynamic> json) {
+    final saldoInicial = (json['saldo_inicial'] as num?)?.toDouble() ?? 0.0;
+    final saldoAtual = json['saldo_atual'] != null
+        ? (json['saldo_atual'] as num).toDouble()
+        : saldoInicial;
+
     return ContaBancariaModel(
       id: json['id']?.toString() ?? '',
       nomeConta: json['nome_conta'] as String? ?? 'Conta Bancária',
@@ -58,8 +63,8 @@ class ContaBancariaModel extends Equatable {
       tipoConta: json['tipo_conta'] as String? ?? 'CORRENTE',
       escopo: json['escopo'] as String? ?? 'PJ',
       chavePix: json['chave_pix'] as String?,
-      saldoInicial: (json['saldo_inicial'] as num?)?.toDouble() ?? 0.0,
-      saldoAtual: (json['saldo_atual'] as num?)?.toDouble() ?? 0.0,
+      saldoInicial: saldoInicial,
+      saldoAtual: saldoAtual,
       corIdentificadora: json['cor_identificadora'] as String?,
       ativo: json['ativo'] as bool? ?? true,
       createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString())?.toLocal() : null,

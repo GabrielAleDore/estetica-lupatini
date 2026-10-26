@@ -12,7 +12,7 @@ class DashboardRepository {
     try {
       final res = await _supabase
           .from('contas_bancarias')
-          .select('id, nome_conta, banco_nome, tipo_conta, escopo, saldo_atual, ativo')
+          .select('id, nome_conta, banco_nome, tipo_conta, escopo, saldo_atual, saldo_inicial, ativo')
           .eq('ativo', true);
 
       final list = List<Map<String, dynamic>>.from(res as List);
@@ -22,7 +22,11 @@ class DashboardRepository {
       int qtdPf = 0;
 
       for (final item in list) {
-        final saldo = (item['saldo_atual'] as num?)?.toDouble() ?? 0.0;
+        final saldoIni = (item['saldo_inicial'] as num?)?.toDouble() ?? 0.0;
+        final saldo = item['saldo_atual'] != null
+            ? (item['saldo_atual'] as num).toDouble()
+            : saldoIni;
+        item['saldo_atual'] = saldo;
         final escopo = (item['escopo'] as String? ?? 'PJ').toUpperCase();
         if (escopo == 'PF') {
           saldoPf += saldo;
@@ -59,7 +63,7 @@ class DashboardRepository {
   Future<Map<String, dynamic>> obterDashboardResumo(String mes) async {
     try {
       // Executa a Stored Procedure agregada de alta performance do PostgreSQL
-      final response = await _supabase.rpc('obter_dashboard_resumo');
+      final response = await _supabase.rpc('obter_dashboard_resumo', params: {'p_mes_referencia': mes});
       final data = Map<String, dynamic>.from(response as Map);
 
       final faturamentoPj = (data['faturamento_pj'] as num?)?.toDouble() ?? 0.0;
@@ -195,29 +199,23 @@ class DashboardRepository {
 
       final res = await _supabase
           .from('transacoes_financeiras')
-          .select('id, descricao, valor, valor_total, tipo, status, escopo, categoria_nome, data_transacao, data_competencia, conta_bancaria_id');
+          .select('*')
+          .inFilter('tipo', ['RECEITA', 'ENTRADA'])
+          .inFilter('status', ['EFETIVADO', 'PAGO'])
+          .gte('data_transacao', inicio)
+          .lte('data_transacao', fim);
 
       final list = List<Map<String, dynamic>>.from(res as List);
       double totalPj = 0.0;
       double totalPf = 0.0;
-      final List<Map<String, dynamic>> doMes = [];
 
       for (final item in list) {
-        final tipo = (item['tipo'] as String? ?? '').toUpperCase();
-        final status = (item['status'] as String? ?? '').toUpperCase();
-        if (tipo != 'RECEITA' && tipo != 'ENTRADA') continue;
-        if (status != 'EFETIVADO' && status != 'PAGO') continue;
-
-        final data = (item['data_transacao'] ?? item['data_competencia'] ?? '').toString();
-        if (data.compareTo(inicio) >= 0 && data.compareTo(fim) <= 0) {
-          doMes.add(item);
-          final val = (item['valor'] as num?)?.toDouble() ?? (item['valor_total'] as num?)?.toDouble() ?? 0.0;
-          final escopo = (item['escopo'] as String? ?? 'PJ').toUpperCase();
-          if (escopo == 'PF') {
-            totalPf += val;
-          } else {
-            totalPj += val;
-          }
+        final val = (item['valor'] as num?)?.toDouble() ?? (item['valor_total'] as num?)?.toDouble() ?? 0.0;
+        final escopo = (item['escopo'] as String? ?? 'PJ').toUpperCase();
+        if (escopo == 'PF') {
+          totalPf += val;
+        } else {
+          totalPj += val;
         }
       }
 
@@ -225,7 +223,7 @@ class DashboardRepository {
         'total_receitas_pj': totalPj,
         'total_receitas_pf': totalPf,
         'total_receitas_geral': totalPj + totalPf,
-        'transacoes': doMes,
+        'transacoes': list,
       };
     } catch (_) {
       return {
@@ -237,15 +235,47 @@ class DashboardRepository {
     }
   }
 
-  /// Registra uma receita ou entrada avulsa e atualiza o saldo bancário
+  /// Registra uma receita ou entrada avulsa, ou realiza transferência bancária entre contas
   Future<Map<String, dynamic>> registrarReceitaAvulsa(Map<String, dynamic> dados) async {
     try {
+      final forma = (dados['forma_pagamento']?.toString() ?? '').toUpperCase();
+      final isTransferencia = forma == 'TRANSFERENCIA' || dados['is_transferencia'] == true;
+
+      // Se for transferência entre contas bancárias, executa a RPC atômica
+      if (isTransferencia) {
+        final contaOrigemId = dados['conta_origem_id'];
+        final contaDestinoId = dados['conta_destino_id'] ?? dados['conta_bancaria_id'];
+        final valor = (dados['valor'] as num?)?.toDouble() ?? (dados['valor_total'] as num?)?.toDouble() ?? 0.0;
+        final data = dados['data_transacao'] ?? dados['data_competencia'] ?? DateTime.now().toIso8601String().substring(0, 10);
+        final descricao = dados['descricao'] ?? 'Transferência entre Contas';
+        final escopo = dados['escopo'] ?? 'PJ';
+        final observacoes = dados['observacoes'];
+
+        if (contaOrigemId == null || contaDestinoId == null) {
+          throw Exception('Para transferência, selecione a conta de origem e a conta de destino.');
+        }
+
+        final res = await _supabase.rpc('realizar_transferencia_bancaria', params: {
+          'p_conta_origem_id': contaOrigemId.toString(),
+          'p_conta_destino_id': contaDestinoId.toString(),
+          'p_valor': valor,
+          'p_data': data,
+          'p_descricao': descricao,
+          'p_escopo': escopo,
+          if (observacoes != null) 'p_observacoes': observacoes,
+        });
+
+        return Map<String, dynamic>.from(res as Map);
+      }
+
       final valor = (dados['valor'] as num?)?.toDouble() ?? (dados['valor_total'] as num?)?.toDouble() ?? 0.0;
       final payload = Map<String, dynamic>.from(dados);
       payload['valor'] = valor;
       payload['valor_total'] = valor;
-      payload['tipo'] = dados['tipo'] ?? 'RECEITA';
-      payload['status'] = dados['status'] ?? 'EFETIVADO';
+      final tipoStr = (dados['tipo']?.toString() ?? 'ENTRADA').toUpperCase();
+      payload['tipo'] = (tipoStr == 'RECEITA' || tipoStr == 'ENTRADA') ? 'ENTRADA' : tipoStr;
+      final statusStr = (dados['status']?.toString() ?? 'PAGO').toUpperCase();
+      payload['status'] = (statusStr == 'EFETIVADO' || statusStr == 'PAGO') ? 'PAGO' : statusStr;
       payload['origem'] = dados['origem'] ?? 'MANUAL';
       if (payload['data_transacao'] == null && payload['data_competencia'] != null) {
         payload['data_transacao'] = payload['data_competencia'];
@@ -253,26 +283,38 @@ class DashboardRepository {
       if (payload['data_competencia'] == null && payload['data_transacao'] != null) {
         payload['data_competencia'] = payload['data_transacao'];
       }
-
-      final res = await _supabase.from('transacoes_financeiras').insert(payload).select().single();
-
-      // Atualiza o saldo bancário da conta de destino se a transação estiver EFETIVADA
-      final contaBancariaId = payload['conta_bancaria_id']?.toString();
-      if (contaBancariaId != null && contaBancariaId.isNotEmpty && (payload['status'] == 'EFETIVADO' || payload['status'] == 'PAGO')) {
-        try {
-          final conta = await _supabase.from('contas_bancarias').select('saldo_atual, updated_at').eq('id', contaBancariaId).single();
-          final updatedAt = conta['updated_at'] != null ? DateTime.tryParse(conta['updated_at'].toString()) : null;
-          final agora = DateTime.now().toUtc();
-          final rodouTrigger = updatedAt != null && agora.difference(updatedAt.toUtc()).inSeconds.abs() <= 2;
-          if (!rodouTrigger) {
-            final saldoAtual = (conta['saldo_atual'] as num?)?.toDouble() ?? 0.0;
-            await _supabase.from('contas_bancarias').update({
-              'saldo_atual': saldoAtual + valor,
-            }).eq('id', contaBancariaId);
-          }
-        } catch (_) {}
+      if (payload['data_vencimento'] == null) {
+        payload['data_vencimento'] = payload['data_transacao'] ?? payload['data_competencia'] ?? DateTime.now().toIso8601String().substring(0, 10);
       }
 
+      Map<String, dynamic> res;
+      try {
+        res = await _supabase.from('transacoes_financeiras').insert(payload).select().single();
+      } catch (insertErr) {
+        final errText = insertErr.toString();
+        // Fallback resiliente caso o script SQL ainda não tenha sido executado no Supabase
+        if (errText.contains('PGRST204') || errText.contains('column') || errText.contains('categoria_nome') || errText.contains('conta_bancaria_id') || errText.contains('origem') || errText.contains('valor_total')) {
+          final fallbackPayload = <String, dynamic>{
+            'descricao': '${payload['descricao']} [${payload['categoria_nome'] ?? 'Receita Avulsa'}]',
+            'escopo': payload['escopo'] ?? 'PJ',
+            'tipo': 'ENTRADA',
+            'valor_total': valor,
+            'status': payload['status'] ?? 'PAGO',
+            'data_competencia': payload['data_competencia'] ?? payload['data_transacao'] ?? DateTime.now().toIso8601String().substring(0, 10),
+            'data_vencimento': payload['data_vencimento'] ?? DateTime.now().toIso8601String().substring(0, 10),
+            if (payload['forma_pagamento'] != null) 'forma_pagamento': payload['forma_pagamento'],
+            if (payload['conta_bancaria_id'] != null) 'conta_bancaria_id': payload['conta_bancaria_id'],
+          };
+          if (payload['observacoes'] != null && payload['observacoes'].toString().isNotEmpty) {
+            fallbackPayload['descricao'] = '${fallbackPayload['descricao']} - ${payload['observacoes']}';
+          }
+          res = await _supabase.from('transacoes_financeiras').insert(fallbackPayload).select().single();
+        } else {
+          rethrow;
+        }
+      }
+
+      // O saldo bancário é atualizado atomicamente pelo trigger PostgreSQL trg_atualizar_saldo_conta_bancaria
       return Map<String, dynamic>.from(res);
     } catch (e) {
       throw Exception('Erro ao registrar receita avulsa no Supabase: $e');

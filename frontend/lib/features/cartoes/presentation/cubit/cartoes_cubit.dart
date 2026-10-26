@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../data/cartoes_repository.dart';
+import '../../../contas_pagar/data/contas_pagar_repository.dart';
 import 'cartoes_state.dart';
 
 class CartoesCubit extends Cubit<CartoesState> {
@@ -28,6 +29,9 @@ class CartoesCubit extends Cubit<CartoesState> {
       if (cartoes.isNotEmpty) {
         if (selecionado == null || !cartoes.any((c) => c['id'] == selecionado!['id'])) {
           selecionado = cartoes.first;
+        } else {
+          // Mantém dados atualizados do selecionado
+          selecionado = cartoes.firstWhere((c) => c['id'] == selecionado!['id']);
         }
       } else {
         selecionado = null;
@@ -93,6 +97,25 @@ class CartoesCubit extends Cubit<CartoesState> {
     }
   }
 
+  Future<bool> atualizarCartao(String id, Map<String, dynamic> dados) async {
+    emit(state.copyWith(status: CartoesStatus.submitting));
+    try {
+      await _repository.atualizarCartao(id, dados);
+      emit(state.copyWith(
+        status: CartoesStatus.success,
+        successMessage: 'Cartão atualizado com sucesso!',
+      ));
+      await carregarCartoes();
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: CartoesStatus.error,
+        errorMessage: e.toString(),
+      ));
+      return false;
+    }
+  }
+
   Future<bool> registrarDespesaCartao(Map<String, dynamic> dados) async {
     emit(state.copyWith(status: CartoesStatus.submitting));
     try {
@@ -101,7 +124,6 @@ class CartoesCubit extends Cubit<CartoesState> {
       // Re-busca imediatamente os cartões e seus limites atualizados
       final cartoesAtualizados = await _repository.listarCartoes(escopo: state.filtroEscopo);
       
-      // Mantém ou ajusta o cartão selecionado
       final cartaoAfetadoId = dados['cartao_id']?.toString() ?? state.cartaoSelecionado?['id'];
       Map<String, dynamic>? novoSelecionado;
       if (cartoesAtualizados.isNotEmpty) {
@@ -111,7 +133,6 @@ class CartoesCubit extends Cubit<CartoesState> {
         );
       }
 
-      // Re-busca a fatura do cartão selecionado
       Map<String, dynamic>? faturaAtualizada;
       if (novoSelecionado != null) {
         try {
@@ -126,6 +147,48 @@ class CartoesCubit extends Cubit<CartoesState> {
         cartaoSelecionado: novoSelecionado,
         faturaDetalhada: faturaAtualizada,
       ));
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: CartoesStatus.error,
+        errorMessage: e.toString(),
+      ));
+      return false;
+    }
+  }
+
+  /// Permite editar uma parcela vinculada à fatura e atualizar em cascata se solicitado
+  Future<bool> atualizarParcelaDespesa({
+    required String transacaoId,
+    required String novaDataVencimentoStr,
+    double? novoValor,
+    String? novaDescricao,
+    String? novaCategoriaId,
+    required bool aplicarEmTodasSeguintes,
+  }) async {
+    try {
+      await ContasPagarRepository().atualizarParcelaDespesa(
+        transacaoId: transacaoId,
+        novaDataVencimentoStr: novaDataVencimentoStr,
+        novoValor: novoValor,
+        novaDescricao: novaDescricao,
+        novaCategoriaId: novaCategoriaId,
+        aplicarEmTodasSeguintes: aplicarEmTodasSeguintes,
+      );
+
+      final msg = aplicarEmTodasSeguintes
+          ? 'Parcela e parcelas seguintes atualizadas com sucesso!'
+          : 'Parcela atualizada com sucesso!';
+
+      emit(state.copyWith(
+        status: CartoesStatus.success,
+        successMessage: msg,
+      ));
+
+      if (state.cartaoSelecionado != null) {
+        await carregarFatura(state.cartaoSelecionado!['id'], state.mesReferencia);
+        await carregarCartoes();
+      }
       return true;
     } catch (e) {
       emit(state.copyWith(

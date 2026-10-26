@@ -53,5 +53,9 @@ desktop.ini
 *.pyc
 __pycache__/
 **/__pycache__/
+.venv/
+**/.venv/
+.pytest_cache/
+**/.pytest_cache/
 node_modules/
 **/node_modules/

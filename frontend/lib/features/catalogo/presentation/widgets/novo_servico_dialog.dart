@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/utils/moeda_input_formatter.dart';
 
 class NovoServicoDialog extends StatefulWidget {
   final Map<String, dynamic>? servicoParaEditar;
@@ -40,7 +41,7 @@ class _NovoServicoDialogState extends State<NovoServicoDialog> {
     _nomeController = TextEditingController(text: s?['nome'] ?? '');
     _duracaoController = TextEditingController(text: (s?['duracao_minutos'] ?? 60).toString());
     _precoController = TextEditingController(
-      text: s != null ? (double.tryParse(s['preco']?.toString() ?? '0') ?? 0.0).toStringAsFixed(2) : '150.00',
+      text: MoedaInputFormatter.formatar(double.tryParse(s?['preco']?.toString() ?? '') ?? 150.0),
     );
     _categoriaId = s?['categoria_id'];
     _ativo = s?['ativo'] ?? true;
@@ -94,7 +95,7 @@ class _NovoServicoDialogState extends State<NovoServicoDialog> {
     setState(() => _erroInline = null);
     if (!_formKey.currentState!.validate()) return;
 
-    final preco = double.tryParse(_precoController.text.trim().replaceAll(',', '.')) ?? 0.0;
+    final preco = MoedaInputFormatter.parse(_precoController.text);
     final duracao = int.tryParse(_duracaoController.text.trim()) ?? 60;
 
     final insumosPayload = <Map<String, dynamic>>[];
@@ -273,14 +274,18 @@ class _NovoServicoDialogState extends State<NovoServicoDialog> {
                             Expanded(
                               child: TextFormField(
                                 controller: _precoController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  MoedaInputFormatter(),
+                                ],
                                 decoration: const InputDecoration(
                                   labelText: 'Preço Base (R\$) *',
-                                  hintText: '150.00',
+                                  hintText: '0,00',
                                   prefixIcon: Icon(Icons.attach_money),
+                                  prefixText: 'R\$ ',
                                   border: OutlineInputBorder(),
                                 ),
-                                validator: (v) => (v == null || double.tryParse(v.replaceAll(',', '.')) == null)
+                                validator: (v) => (v == null || MoedaInputFormatter.parse(v) <= 0)
                                     ? 'Informe um preço válido.'
                                     : null,
                               ),

@@ -11,6 +11,8 @@ import '../../services/relatorio_dre_pdf_service.dart';
 import '../../../shell/main_navigation_shell.dart';
 import '../../../contas_bancarias/presentation/pages/contas_bancarias_page.dart';
 import '../../../contas_bancarias/presentation/cubit/contas_bancarias_cubit.dart';
+import '../../../vendas/presentation/pages/movimentacoes_vendas_page.dart';
+import '../../../contas_pagar/presentation/pages/contas_pagar_page.dart';
 
 class DashboardPage extends StatelessWidget {
   final DashboardCubit? cubit;
@@ -79,6 +81,14 @@ class _DashboardView extends StatelessWidget {
             try {
               context.read<ContasBancariasCubit>().carregarContas();
             } catch (_) {}
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(dados['is_transferencia'] == true
+                    ? 'Transferência entre contas realizada com sucesso!'
+                    : 'Receita registrada e creditada com sucesso!'),
+                backgroundColor: AppColors.success,
+              ),
+            );
           }
           return res;
         },
@@ -100,6 +110,26 @@ class _DashboardView extends StatelessWidget {
     } catch (_) {
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const ContasBancariasPage()),
+      );
+    }
+  }
+
+  void _navegarParaRegistroReceitas(BuildContext context) {
+    try {
+      MainNavigationShell.navegarPara('Registro de Receitas');
+    } catch (_) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const MovimentacoesVendasPage()),
+      );
+    }
+  }
+
+  void _navegarParaRegistroDespesas(BuildContext context) {
+    try {
+      MainNavigationShell.navegarPara('Registro de Despesas');
+    } catch (_) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const ContasPagarPage()),
       );
     }
   }
@@ -158,19 +188,17 @@ class _DashboardView extends StatelessWidget {
           final receitaLiquida = state.totalFaturadoPj > 0
               ? state.totalFaturadoPj
               : (double.tryParse(dre['receita_liquida']?.toString() ?? '0') ?? 0.0);
-          final despesasOperacionais = double.tryParse(dre['despesas_operacionais_pj']?.toString() ?? '0') ?? 0.0;
+          final despesasOperacionais = double.tryParse(dre['despesas_operacionais_pj']?.toString() ??
+              dre['despesas_operacionais']?.toString() ?? '0') ?? 0.0;
           final cpv = double.tryParse(dre['custo_produtos_vendidos']?.toString() ?? '0') ?? 0.0;
           final cis = double.tryParse(dre['custo_insumos_procedimentos']?.toString() ??
               dre['custo_insumos_servicos']?.toString() ?? '0') ?? 0.0;
-          final totalCustosPj = despesasOperacionais + cpv + cis;
-          final lucroOperacionalPj = double.tryParse(dre['resultado_operacional_pj']?.toString() ?? '0') ??
-              (receitaLiquida - totalCustosPj);
-          final gastosSociosPf = state.totalDespesasPf > 0
-              ? state.totalDespesasPf
-              : (double.tryParse(dre['gastos_pessoais_pf']?.toString() ?? '0') ?? 0.0);
+          final totalCustos = despesasOperacionais + cpv + cis;
+          final lucroOperacional = double.tryParse(dre['resultado_operacional_pj']?.toString() ?? '0') ??
+              (receitaLiquida - totalCustos);
           final saldoFinal = state.balancoLiquido != 0.0
               ? state.balancoLiquido
-              : (double.tryParse(dre['saldo_caixa_final']?.toString() ?? '0') ?? (lucroOperacionalPj - gastosSociosPf));
+              : lucroOperacional;
 
           final totalAlertaEstoque = state.totalItensAlertaEstoque;
 
@@ -281,123 +309,182 @@ class _DashboardView extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // 1. Bloco de Liquidez Financeira Imediata (Contas Bancárias PJ e PF)
+                // 1. Bloco de Liquidez Financeira Imediata (Total de Saídas, Total de Receitas e Saldo Atual por Conta)
                 _BankLiquidityBlock(
-                  saldoTotalPJ: state.saldoTotalPJ,
-                  saldoTotalPF: state.saldoTotalPF,
+                  totalSaidas: totalCustos,
+                  totalReceitas: state.faturamentoTotalConsolidadoPJ > 0
+                      ? state.faturamentoTotalConsolidadoPJ
+                      : receitaLiquida,
                   saldoTotalGeral: state.saldoTotalGeral,
-                  qtdContasPJ: state.qtdContasPJ,
-                  qtdContasPF: state.qtdContasPF,
-                  saldoOperacionalMes: lucroOperacionalPj,
+                  qtdContasTotal: state.contasBancarias.isNotEmpty ? state.contasBancarias.length : (state.qtdContasPJ + state.qtdContasPF),
+                  contasBancarias: state.contasBancarias,
+                  mesReferencia: state.mesReferencia,
                   onGerenciarContas: () => _navegarParaContasBancarias(context),
-                  onNovaReceita: () => _abrirModalNovaReceita(context),
-                  onNovaReceitaEscopo: (escopo) => _abrirModalNovaReceita(context, escopo),
+                  onVerDespesas: () => _navegarParaRegistroDespesas(context),
+                  onVerReceitas: () => _navegarParaRegistroReceitas(context),
                 ),
                 const SizedBox(height: 24),
 
-                // 2 Cards Destaque: Vendas Efetivadas vs A Receber
+                // 3 Cards Destaque: Vendas Efetivadas vs A Receber vs Resultado
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final isWide = constraints.maxWidth > 700;
-                    if (!isWide) {
-                      return Column(
+                    final isDesktop = constraints.maxWidth > 950;
+                    final isTablet = constraints.maxWidth > 650;
+                    final resultadoPeriodo = state.vendasEfetivadas - totalCustos;
+                    final isResultadoPositivo = resultadoPeriodo >= 0;
+
+                    final cardEfetivadas = _HighlightCard(
+                      title: 'Vendas Efetivadas (Recebidas)',
+                      value: currencyFormat.format(state.vendasEfetivadas),
+                      subtitle: 'Recebimentos confirmados e liquidados no caixa',
+                      icon: Icons.check_circle_outline,
+                      color: const Color(0xFF2E7D32),
+                      accentBg: const Color(0xFFE8F5E9),
+                    );
+
+                    final cardPendentes = _HighlightCard(
+                      title: 'Vendas a Receber (Pendentes)',
+                      value: currencyFormat.format(state.vendasAReceber),
+                      subtitle: 'Vendas a prazo / Fiado pendente de liquidação',
+                      icon: Icons.pending_actions_outlined,
+                      color: const Color(0xFFE65100),
+                      accentBg: const Color(0xFFFFF3E0),
+                    );
+
+                    final cardResultado = _HighlightCard(
+                      title: 'Resultado Operacional',
+                      value: currencyFormat.format(resultadoPeriodo),
+                      subtitle: isResultadoPositivo
+                          ? 'Superávit líquido no período selecionado'
+                          : 'Déficit líquido no período selecionado',
+                      icon: isResultadoPositivo
+                          ? Icons.insights_rounded
+                          : Icons.trending_down_rounded,
+                      color: isResultadoPositivo
+                          ? const Color(0xFF1565C0)
+                          : const Color(0xFFC62828),
+                      accentBg: isResultadoPositivo
+                          ? const Color(0xFFE3F2FD)
+                          : const Color(0xFFFFEBEE),
+                    );
+
+                    if (isDesktop) {
+                      return Row(
                         children: [
-                          _HighlightCard(
-                            title: 'Vendas Efetivadas (Recebidas)',
-                            value: currencyFormat.format(state.vendasEfetivadas),
-                            subtitle: 'Recebimentos confirmados e liquidados no caixa',
-                            icon: Icons.check_circle_outline,
-                            color: const Color(0xFF2E7D32),
-                            accentBg: const Color(0xFFE8F5E9),
-                          ),
-                          const SizedBox(height: 12),
-                          _HighlightCard(
-                            title: 'Vendas a Receber (Pendentes)',
-                            value: currencyFormat.format(state.vendasAReceber),
-                            subtitle: 'Vendas a prazo / Fiado pendente de liquidação',
-                            icon: Icons.pending_actions_outlined,
-                            color: const Color(0xFFE65100),
-                            accentBg: const Color(0xFFFFF3E0),
-                          ),
+                          Expanded(child: cardEfetivadas),
+                          const SizedBox(width: 16),
+                          Expanded(child: cardPendentes),
+                          const SizedBox(width: 16),
+                          Expanded(child: cardResultado),
                         ],
                       );
                     }
-                    return Row(
+
+                    if (isTablet) {
+                      return Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(child: cardEfetivadas),
+                              const SizedBox(width: 16),
+                              Expanded(child: cardPendentes),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          cardResultado,
+                        ],
+                      );
+                    }
+
+                    return Column(
                       children: [
-                        Expanded(
-                          child: _HighlightCard(
-                            title: 'Vendas Efetivadas (Recebidas)',
-                            value: currencyFormat.format(state.vendasEfetivadas),
-                            subtitle: 'Recebimentos confirmados e liquidados no caixa',
-                            icon: Icons.check_circle_outline,
-                            color: const Color(0xFF2E7D32),
-                            accentBg: const Color(0xFFE8F5E9),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _HighlightCard(
-                            title: 'Vendas a Receber (Pendentes)',
-                            value: currencyFormat.format(state.vendasAReceber),
-                            subtitle: 'Vendas a prazo / Fiado pendente de liquidação',
-                            icon: Icons.pending_actions_outlined,
-                            color: const Color(0xFFE65100),
-                            accentBg: const Color(0xFFFFF3E0),
-                          ),
-                        ),
+                        cardEfetivadas,
+                        const SizedBox(height: 12),
+                        cardPendentes,
+                        const SizedBox(height: 12),
+                        cardResultado,
                       ],
                     );
                   },
                 ),
                 const SizedBox(height: 16),
 
-                // 4 Cards de Métricas DRE (Grid)
+                // 3 Cards de Métricas DRE (Total Faturamento, Despesas Fixas e Balanço Líquido)
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final isWide = constraints.maxWidth > 900;
-                    return GridView.count(
-                      crossAxisCount: isWide ? 4 : 2,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      childAspectRatio: isWide ? 1.6 : 1.3,
+                    final isDesktop = constraints.maxWidth > 950;
+                    final isTablet = constraints.maxWidth > 650;
+                    final totalFaturamento = state.faturamentoTotalConsolidadoPJ > 0
+                        ? state.faturamentoTotalConsolidadoPJ
+                        : receitaLiquida;
+                    final totalDespesasTotais = totalCustos;
+
+                    final cardFaturamento = _MetricCard(
+                      title: 'Total Faturamento',
+                      value: currencyFormat.format(totalFaturamento),
+                      subtitle: 'Receita consolidada no mês',
+                      icon: Icons.trending_up,
+                      color: const Color(0xFF2E7D32),
+                    );
+
+                    final cardDespesasFixas = _MetricCard(
+                      title: 'Despesas & Custos Totais',
+                      value: currencyFormat.format(totalDespesasTotais),
+                      subtitle: 'Custos com insumos e despesas operacionais',
+                      icon: Icons.receipt_long,
+                      color: Colors.orange.shade800,
+                    );
+
+                    final cardBalancoLiquido = _MetricCard(
+                      title: 'Balanço Líquido',
+                      value: currencyFormat.format(saldoFinal),
+                      subtitle: saldoFinal >= 0 ? 'Resultado Positivo (Superávit)' : 'Alerta de Déficit',
+                      icon: Icons.account_balance_wallet,
+                      color: saldoFinal >= 0 ? AppColors.success : AppColors.error,
+                    );
+
+                    if (isDesktop) {
+                      return Row(
+                        children: [
+                          Expanded(child: cardFaturamento),
+                          const SizedBox(width: 16),
+                          Expanded(child: cardDespesasFixas),
+                          const SizedBox(width: 16),
+                          Expanded(child: cardBalancoLiquido),
+                        ],
+                      );
+                    }
+
+                    if (isTablet) {
+                      return Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(child: cardFaturamento),
+                              const SizedBox(width: 16),
+                              Expanded(child: cardDespesasFixas),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          cardBalancoLiquido,
+                        ],
+                      );
+                    }
+
+                    return Column(
                       children: [
-                        _MetricCard(
-                          title: 'Total Faturado (PJ)',
-                          value: currencyFormat.format(receitaLiquida),
-                          subtitle: 'Receita Líquida no Mês',
-                          icon: Icons.trending_up,
-                          color: AppColors.pjClinical,
-                        ),
-                        _MetricCard(
-                          title: 'Despesas Fixas (PJ)',
-                          value: currencyFormat.format(despesasOperacionais),
-                          subtitle: 'Custos operacionais clínica',
-                          icon: Icons.business,
-                          color: Colors.orange.shade700,
-                        ),
-                        _MetricCard(
-                          title: 'Gastos Pessoais (PF)',
-                          value: currencyFormat.format(gastosSociosPf),
-                          subtitle: 'Segregado: Sócios',
-                          icon: Icons.person_pin,
-                          color: AppColors.pfPersonal,
-                        ),
-                        _MetricCard(
-                          title: 'Balanço Líquido (Caixa)',
-                          value: currencyFormat.format(saldoFinal),
-                          subtitle: saldoFinal >= 0 ? 'Resultado Positivo' : 'Alerta de Déficit',
-                          icon: Icons.account_balance_wallet,
-                          color: saldoFinal >= 0 ? AppColors.success : AppColors.error,
-                        ),
+                        cardFaturamento,
+                        const SizedBox(height: 12),
+                        cardDespesasFixas,
+                        const SizedBox(height: 12),
+                        cardBalancoLiquido,
                       ],
                     );
                   },
                 ),
                 const SizedBox(height: 24),
 
-                // Seção DRE Detalhado com Segregação Cirúrgica
+                // Seção DRE Detalhado Unificado
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -427,7 +514,7 @@ class _DashboardView extends StatelessWidget {
                       ),
                       if (state.receitasAvulsasPJ > 0)
                         _DRELineItem(
-                          label: '(+) Entradas e Receitas Avulsas (PIX/Aportes PJ)',
+                          label: '(+) Entradas e Receitas Avulsas (PIX / Aportes)',
                           value: currencyFormat.format(state.receitasAvulsasPJ),
                           color: AppColors.success,
                           isBold: true,
@@ -438,10 +525,10 @@ class _DashboardView extends StatelessWidget {
                         color: AppColors.textSecondaryLight,
                       ),
                       _DRELineItem(
-                        label: '(=) Receita Líquida da Clínica (PJ)',
+                        label: '(=) Receita Líquida Real',
                         value: currencyFormat.format(receitaLiquida),
                         isBold: true,
-                        color: AppColors.pjClinical,
+                        color: AppColors.primary,
                       ),
                       const Divider(height: 16),
                       _DRELineItem(
@@ -455,29 +542,16 @@ class _DashboardView extends StatelessWidget {
                         color: Colors.red.shade700,
                       ),
                       _DRELineItem(
-                        label: '(-) Despesas Fixas e Operacionais da Clínica (PJ)',
+                        label: '(-) Despesas Operacionais e Administrativas',
                         value: currencyFormat.format(despesasOperacionais),
                         color: Colors.red.shade700,
                       ),
-                      _DRELineItem(
-                        label: '(=) Resultado Operacional da Clínica (PJ)',
-                        value: currencyFormat.format(lucroOperacionalPj),
-                        isBold: true,
-                        color: lucroOperacionalPj >= 0 ? AppColors.success : AppColors.error,
-                      ),
                       const Divider(height: 16),
                       _DRELineItem(
-                        label: '(-) Gastos e Retiradas Pessoais dos Sócios (PF)',
-                        value: currencyFormat.format(gastosSociosPf),
+                        label: '(=) Resultado Operacional Líquido do Mês',
+                        value: currencyFormat.format(lucroOperacional),
                         isBold: true,
-                        color: AppColors.pfPersonal,
-                      ),
-                      const Divider(height: 16),
-                      _DRELineItem(
-                        label: '(=) Saldo Final em Caixa (Resultado Líquido)',
-                        value: currencyFormat.format(saldoFinal),
-                        isBold: true,
-                        color: saldoFinal >= 0 ? AppColors.success : AppColors.error,
+                        color: lucroOperacional >= 0 ? AppColors.success : AppColors.error,
                         isHighlighted: true,
                       ),
                     ],
@@ -750,26 +824,26 @@ class _HighlightCard extends StatelessWidget {
 // =====================================================================
 
 class _BankLiquidityBlock extends StatelessWidget {
-  final double saldoTotalPJ;
-  final double saldoTotalPF;
+  final double totalSaidas;
+  final double totalReceitas;
   final double saldoTotalGeral;
-  final int qtdContasPJ;
-  final int qtdContasPF;
-  final double saldoOperacionalMes;
+  final int qtdContasTotal;
+  final List<Map<String, dynamic>> contasBancarias;
+  final String mesReferencia;
   final VoidCallback onGerenciarContas;
-  final VoidCallback onNovaReceita;
-  final void Function(String escopo) onNovaReceitaEscopo;
+  final VoidCallback onVerDespesas;
+  final VoidCallback onVerReceitas;
 
   const _BankLiquidityBlock({
-    required this.saldoTotalPJ,
-    required this.saldoTotalPF,
+    required this.totalSaidas,
+    required this.totalReceitas,
     required this.saldoTotalGeral,
-    required this.qtdContasPJ,
-    required this.qtdContasPF,
-    required this.saldoOperacionalMes,
+    required this.qtdContasTotal,
+    this.contasBancarias = const [],
+    required this.mesReferencia,
     required this.onGerenciarContas,
-    required this.onNovaReceita,
-    required this.onNovaReceitaEscopo,
+    required this.onVerDespesas,
+    required this.onVerReceitas,
   });
 
   @override
@@ -793,7 +867,7 @@ class _BankLiquidityBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cabeçalho do Bloco com Segregação e Ações Rápidas
+          // Cabeçalho do Bloco com Ação de Ver Contas Bancárias
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -824,7 +898,7 @@ class _BankLiquidityBlock extends StatelessWidget {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Disponibilidade em tempo real com segregação entre Clínica (PJ) e Sócios (PF)',
+                      'Visão consolidada de saídas, receitas e saldo disponível em contas bancárias',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondaryLight,
@@ -834,94 +908,67 @@ class _BankLiquidityBlock extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: onNovaReceita,
-                    icon: const Icon(Icons.add_card, size: 16),
-                    label: const Text('+ ENTRADA / PIX'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.success,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: onGerenciarContas,
-                    icon: const Icon(Icons.open_in_new, size: 16),
-                    label: const Text('VER CONTAS BANCÁRIAS'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
+              OutlinedButton.icon(
+                onPressed: onGerenciarContas,
+                icon: const Icon(Icons.open_in_new, size: 16),
+                label: const Text('VER CONTAS BANCÁRIAS'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 18),
 
-          // 3 Cards Responsivos
+          // 3 Cards Responsivos: Total de Saídas / Total de Receitas / Saldo Atual
           LayoutBuilder(
             builder: (context, constraints) {
               final isDesktop = constraints.maxWidth > 950;
               final isTablet = constraints.maxWidth > 650;
 
-              final cardPj = _BankLiquidityCard(
-                badgeLabel: 'PJ • CLÍNICA',
-                badgeColor: AppColors.pjClinical,
+              final cardSaidas = _BankLiquidityCard(
+                badgeLabel: 'TOTAL DE SAÍDAS',
+                badgeColor: const Color(0xFFC62828),
                 badgeTextColor: Colors.white,
-                title: 'Saldo Disponível Clínica (PJ)',
-                value: currencyFormat.format(saldoTotalPJ),
-                subtitle: qtdContasPJ == 0
-                    ? 'Nenhuma conta PJ ativa'
-                    : '$qtdContasPJ ${qtdContasPJ == 1 ? "conta operacional ativa" : "contas operacionais ativas"}',
-                description: 'Recursos para custeio e operação clínica',
-                icon: Icons.business_center_rounded,
-                accentColor: AppColors.pjClinical,
-                accentBg: const Color(0xFFF7ECE8),
-                actionLabel: '+ PIX / Receita',
-                onActionTap: () => onNovaReceitaEscopo('PJ'),
-                onTap: onGerenciarContas,
+                title: 'Total de Saídas',
+                value: currencyFormat.format(totalSaidas),
+                subtitle: 'Custos e despesas operacionais do mês',
+                description: 'Competência: $mesReferencia',
+                icon: Icons.trending_down_rounded,
+                accentColor: const Color(0xFFC62828),
+                accentBg: const Color(0xFFFFEBEE),
+                onTap: onVerDespesas,
               );
 
-              final cardPf = _BankLiquidityCard(
-                badgeLabel: 'PF • SÓCIOS',
-                badgeColor: const Color(0xFFB07D4F),
+              final cardReceitas = _BankLiquidityCard(
+                badgeLabel: 'TOTAL DE RECEITAS',
+                badgeColor: const Color(0xFF2E7D32),
                 badgeTextColor: Colors.white,
-                title: 'Saldo Pessoal / Sócios (PF)',
-                value: currencyFormat.format(saldoTotalPF),
-                subtitle: qtdContasPF == 0
-                    ? 'Nenhuma conta PF ativa'
-                    : '$qtdContasPF ${qtdContasPF == 1 ? "conta pessoal ativa" : "contas pessoais ativas"}',
-                description: 'Patrimônio particular segregado dos sócios',
-                icon: Icons.person_pin_rounded,
-                accentColor: const Color(0xFFB07D4F),
-                accentBg: const Color(0xFFFAF3EC),
-                actionLabel: '+ Aporte / PIX',
-                onActionTap: () => onNovaReceitaEscopo('PF'),
-                onTap: onGerenciarContas,
-              );
-
-              final cardTotal = _BankLiquidityCard(
-                badgeLabel: 'PATRIMÔNIO LÍQUIDO BANCÁRIO',
-                badgeColor: const Color(0xFF1B5E20),
-                badgeTextColor: Colors.white,
-                title: 'Patrimônio Líquido (Total)',
-                value: currencyFormat.format(saldoTotalGeral),
-                subtitle: '${qtdContasPJ + qtdContasPF} contas bancárias ativas',
-                description: 'Saldo Operacional Mês: ${currencyFormat.format(saldoOperacionalMes)}',
-                icon: Icons.account_balance_wallet_rounded,
+                title: 'Total de Receitas',
+                value: currencyFormat.format(totalReceitas),
+                subtitle: 'Vendas recebidas e receitas do mês',
+                description: 'Entradas acumuladas no período',
+                icon: Icons.trending_up_rounded,
                 accentColor: const Color(0xFF2E7D32),
                 accentBg: const Color(0xFFE8F5E9),
+                onTap: onVerReceitas,
+              );
+
+              final cardSaldo = _BankLiquidityCard(
+                badgeLabel: 'SALDO ATUAL',
+                badgeColor: const Color(0xFF1565C0),
+                badgeTextColor: Colors.white,
+                title: 'Saldo Atual em Contas',
+                value: currencyFormat.format(saldoTotalGeral),
+                subtitle: '$qtdContasTotal ${qtdContasTotal == 1 ? "conta bancária ativa" : "contas bancárias ativas"}',
+                description: 'Disponibilidade líquida consolidada',
+                icon: Icons.account_balance_wallet_rounded,
+                accentColor: const Color(0xFF1565C0),
+                accentBg: const Color(0xFFE3F2FD),
                 isHighlighted: true,
-                actionLabel: '+ Entrada Geral',
-                onActionTap: onNovaReceita,
                 onTap: onGerenciarContas,
               );
 
@@ -929,11 +976,11 @@ class _BankLiquidityBlock extends StatelessWidget {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: cardPj),
+                    Expanded(child: cardSaidas),
                     const SizedBox(width: 14),
-                    Expanded(child: cardPf),
+                    Expanded(child: cardReceitas),
                     const SizedBox(width: 14),
-                    Expanded(child: cardTotal),
+                    Expanded(child: cardSaldo),
                   ],
                 );
               }
@@ -944,28 +991,132 @@ class _BankLiquidityBlock extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: cardPj),
+                        Expanded(child: cardSaidas),
                         const SizedBox(width: 14),
-                        Expanded(child: cardPf),
+                        Expanded(child: cardReceitas),
                       ],
                     ),
                     const SizedBox(height: 14),
-                    cardTotal,
+                    cardSaldo,
                   ],
                 );
               }
 
               return Column(
                 children: [
-                  cardPj,
+                  cardSaidas,
                   const SizedBox(height: 12),
-                  cardPf,
+                  cardReceitas,
                   const SizedBox(height: 12),
-                  cardTotal,
+                  cardSaldo,
                 ],
               );
             },
           ),
+          if (contasBancarias.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            const Divider(height: 1),
+            const SizedBox(height: 14),
+            const Row(
+              children: [
+                Icon(Icons.account_balance_outlined, size: 16, color: AppColors.textSecondaryLight),
+                SizedBox(width: 6),
+                Text(
+                  'Saldos em Tempo Real por Conta:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textSecondaryLight,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: contasBancarias.map((conta) {
+                  final nome = (conta['nome_identificador'] ?? conta['banco'] ?? 'Conta').toString();
+                  final banco = (conta['banco'] ?? '').toString();
+                  final saldo = double.tryParse(conta['saldo_atual']?.toString() ?? '0') ?? 0.0;
+                  final isPositivo = saldo >= 0;
+
+                  return Container(
+                    margin: const EdgeInsets.only(right: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8F9FA),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.borderLight),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: isPositivo
+                                ? const Color(0xFFE8F5E9)
+                                : const Color(0xFFFFEBEE),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.account_balance,
+                            size: 16,
+                            color: isPositivo
+                                ? const Color(0xFF2E7D32)
+                                : const Color(0xFFC62828),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  nome,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimaryLight,
+                                  ),
+                                ),
+                                if (banco.isNotEmpty && banco != nome) ...[
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '($banco)',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondaryLight,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              currencyFormat.format(saldo),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: isPositivo
+                                    ? const Color(0xFF2E7D32)
+                                    : const Color(0xFFC62828),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -984,8 +1135,6 @@ class _BankLiquidityCard extends StatelessWidget {
   final Color accentColor;
   final Color accentBg;
   final bool isHighlighted;
-  final String? actionLabel;
-  final VoidCallback? onActionTap;
   final VoidCallback onTap;
 
   const _BankLiquidityCard({
@@ -1000,8 +1149,6 @@ class _BankLiquidityCard extends StatelessWidget {
     required this.accentColor,
     required this.accentBg,
     this.isHighlighted = false,
-    this.actionLabel,
-    this.onActionTap,
     required this.onTap,
   });
 
@@ -1125,39 +1272,11 @@ class _BankLiquidityCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (actionLabel != null && onActionTap != null)
-                  InkWell(
-                    onTap: onActionTap,
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.add, size: 12, color: accentColor),
-                          const SizedBox(width: 2),
-                          Text(
-                            actionLabel!,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: accentColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                  Icon(
-                    Icons.chevron_right,
-                    size: 16,
-                    color: accentColor.withValues(alpha: 0.7),
-                  ),
+                Icon(
+                  Icons.chevron_right,
+                  size: 16,
+                  color: accentColor.withValues(alpha: 0.7),
+                ),
               ],
             ),
           ],
@@ -1579,7 +1698,7 @@ class _GerarDreDialogState extends State<_GerarDreDialog> {
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'Demonstração do Resultado do Exercício com separação PJ e PF',
+                          'Demonstração do Resultado do Exercício Contábil e Operacional',
                           style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
                         ),
                       ],
@@ -1707,7 +1826,7 @@ class _GerarDreDialogState extends State<_GerarDreDialog> {
                         isBold: true,
                       ),
                       _buildLinhaResumo(
-                        '(-) Custos e Despesas PJ',
+                        '(-) Custos e Despesas Operacionais',
                         currencyFormat.format(
                           ((_resumoDre!['custo_insumos_consumidos'] as num?)?.toDouble() ?? 0.0) +
                           ((_resumoDre!['despesas_operacionais_pj'] as num?)?.toDouble() ?? 0.0) +
@@ -1718,19 +1837,12 @@ class _GerarDreDialogState extends State<_GerarDreDialog> {
                       ),
                       const Divider(height: 12),
                       _buildLinhaResumo(
-                        '(=) Lucro / Prejuízo Líquido PJ',
+                        '(=) Lucro / Prejuízo Líquido',
                         currencyFormat.format((_resumoDre!['lucro_operacional_liquido'] as num?)?.toDouble() ?? 0.0),
                         isBold: true,
                         cor: ((_resumoDre!['lucro_operacional_liquido'] as num?)?.toDouble() ?? 0.0) >= 0
                             ? const Color(0xFF2E7D32)
                             : Colors.red.shade700,
-                      ),
-                      const SizedBox(height: 6),
-                      _buildLinhaResumo(
-                        '(*) Retiradas / Despesas PF (Informativo)',
-                        currencyFormat.format((_resumoDre!['retiradas_pessoais_pf'] as num?)?.toDouble() ?? 0.0),
-                        isBold: false,
-                        cor: Colors.purple.shade700,
                       ),
                     ],
                   ),

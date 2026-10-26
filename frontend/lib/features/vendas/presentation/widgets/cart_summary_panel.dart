@@ -476,11 +476,11 @@ class CartSummaryPanel extends StatelessWidget {
                   builder: (ctx) {
                     try {
                       final bCubit = ctx.watch<ContasBancariasCubit>();
-                      final contasPjPix = bCubit.state.contas
-                          .where((c) => c.isPj && c.ativo && c.chavePix != null && c.chavePix!.isNotEmpty)
+                      final contasPix = bCubit.state.contas
+                          .where((c) => c.ativo && c.chavePix != null && c.chavePix!.isNotEmpty)
                           .toList();
-                      if (contasPjPix.isEmpty) return const SizedBox.shrink();
-                      final contaPix = contasPjPix.first;
+                      if (contasPix.isEmpty) return const SizedBox.shrink();
+                      final contaPix = contasPix.first;
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                         decoration: BoxDecoration(
@@ -501,6 +501,43 @@ class CartSummaryPanel extends StatelessWidget {
                             ),
                           ],
                         ),
+                      );
+                    } catch (_) {
+                      return const SizedBox.shrink();
+                    }
+                  },
+                ),
+              ],
+
+              // Seleção de Conta de Destino se pagamento à vista (PAGO)
+              if (state.statusPagamento != 'PENDENTE') ...[
+                const SizedBox(height: 10),
+                Builder(
+                  builder: (ctx) {
+                    try {
+                      final bCubit = ctx.watch<ContasBancariasCubit>();
+                      final contas = bCubit.state.contas.where((c) => c.ativo).toList();
+                      if (contas.isEmpty) return const SizedBox.shrink();
+                      return DropdownButtonFormField<String?>(
+                        decoration: InputDecoration(
+                          labelText: 'Conta Destino / Caixa',
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          prefixIcon: const Icon(Icons.account_balance, size: 16),
+                        ),
+                        initialValue: contas.any((c) => c.id == state.contaBancariaId) ? state.contaBancariaId : null,
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Automática / Padrão', style: TextStyle(fontSize: 12)),
+                          ),
+                          ...contas.map((c) => DropdownMenuItem<String?>(
+                            value: c.id,
+                            child: Text('${c.nomeConta} (${c.escopo})', style: const TextStyle(fontSize: 12)),
+                          )),
+                        ],
+                        onChanged: (val) => cubit.selecionarContaBancaria(val),
                       );
                     } catch (_) {
                       return const SizedBox.shrink();

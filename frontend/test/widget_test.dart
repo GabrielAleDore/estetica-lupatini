@@ -25,6 +25,8 @@ import 'package:estetica_lupatini/features/vendas/data/repositories/vendas_histo
 import 'package:estetica_lupatini/features/vendas/presentation/cubit/vendas_historico_cubit.dart';
 import 'package:estetica_lupatini/features/vendas/presentation/pages/movimentacoes_vendas_page.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:estetica_lupatini/features/contas_pagar/data/contas_pagar_repository.dart';
 import 'package:estetica_lupatini/features/contas_pagar/presentation/cubit/contas_pagar_cubit.dart';
 import 'package:estetica_lupatini/features/contas_pagar/presentation/pages/contas_pagar_page.dart';
@@ -37,6 +39,57 @@ import 'package:estetica_lupatini/features/contas_bancarias/domain/models/conta_
 import 'package:estetica_lupatini/features/contas_bancarias/presentation/cubit/contas_bancarias_cubit.dart';
 import 'package:estetica_lupatini/features/contas_bancarias/presentation/pages/contas_bancarias_page.dart';
 import 'package:estetica_lupatini/features/dashboard/presentation/widgets/nova_receita_dialog.dart';
+import 'package:estetica_lupatini/features/operacoes/data/operacoes_repository.dart';
+import 'package:estetica_lupatini/features/operacoes/domain/models/cockpit_data.dart';
+import 'package:estetica_lupatini/features/operacoes/presentation/cubit/operacoes_cubit.dart';
+import 'package:estetica_lupatini/features/operacoes/presentation/pages/cockpit_operacoes_page.dart';
+
+class FakeOperacoesRepository implements OperacoesRepository {
+  @override
+  Future<CockpitData> carregarCockpitData({DateTime? dataReferencia}) async {
+    final hoje = dataReferencia ?? DateTime.now();
+    return CockpitData(
+      saudeFinanceira: const SaudeFinanceiraDia(
+        aReceberHoje: 1250.0,
+        aPagarHoje: 800.0,
+        recebimentosVencidos: 450.0,
+        pagamentosVencidos: 300.0,
+        qtdAReceberHoje: 3,
+        qtdAPagarHoje: 2,
+        qtdRecebimentosVencidos: 1,
+        qtdPagamentosVencidos: 1,
+      ),
+      resumoPeriodo: const ResumoPeriodo(
+        receber: LinhaResumoPeriodo(previsto: 15000.0, naoPago: 3000.0, realizado: 12000.0),
+        pagar: LinhaResumoPeriodo(previsto: 8000.0, naoPago: 2000.0, realizado: 6000.0),
+      ),
+      aniversariantesSemana: [
+        AniversarianteItem(
+          id: 'cli-1',
+          nome: 'Camila Ferreira',
+          telefone: '11999998888',
+          dataNascimento: DateTime(1995, hoje.month, hoje.day),
+          diaMesFormatado: '25/09',
+          idadeACompletar: 31,
+          isHoje: true,
+        ),
+      ],
+      diasComAgendamento: {
+        DateTime(hoje.year, hoje.month, hoje.day): 4,
+      },
+      agendamentosDoDia: [
+        AgendamentoMiniItem(
+          id: 'ag-1',
+          clienteNome: 'Mariana Silveira',
+          servicoNome: 'Limpeza de Pele',
+          dataHoraInicio: DateTime(hoje.year, hoje.month, hoje.day, 14, 0),
+          status: 'AGENDADO',
+        ),
+      ],
+      dataSelecionada: hoje,
+    );
+  }
+}
 
 class FakeContasBancariasRepository implements ContasBancariasRepository {
   @override
@@ -81,6 +134,9 @@ class FakeContasBancariasRepository implements ContasBancariasRepository {
 
   @override
   Future<void> deleteOuInativarConta(String id, {bool deleteDefinitivo = false}) async {}
+
+  @override
+  Future<double> reconciliarSaldo(String id) async => 0.0;
 }
 
 class FakeAgendaRepository implements AgendaRepository {
@@ -193,6 +249,9 @@ class FakeCartoesRepository implements CartoesRepository {
 
   @override
   Future<Map<String, dynamic>> cadastrarCartao(Map<String, dynamic> dados) async => dados;
+
+  @override
+  Future<Map<String, dynamic>> atualizarCartao(String id, Map<String, dynamic> dados) async => dados;
 
   @override
   Future<Map<String, dynamic>> consultarFatura(String cartaoId, String mesReferencia) async => {
@@ -336,11 +395,17 @@ class FakeAuthRepository implements AuthRepository {
 
   @override
   Future<void> atualizarStatusUsuario(String id, bool ativo) async {}
+
+  @override
+  Future<void> excluirUsuario(String id) async {}
 }
 
 class FakeVendasHistoricoRepository implements VendasHistoricoRepository {
   @override
   Stream<List<Map<String, dynamic>>> streamVendas() => const Stream.empty();
+
+  @override
+  Stream<List<Map<String, dynamic>>> streamTransacoes() => const Stream.empty();
 
   @override
   Future<List<Map<String, dynamic>>> listarVendas({
@@ -365,7 +430,7 @@ class FakeVendasHistoricoRepository implements VendasHistoricoRepository {
   ];
 
   @override
-  Future<Map<String, dynamic>> darBaixaVenda(String vendaId, String formaPagamento) async => {
+  Future<Map<String, dynamic>> darBaixaVenda(String vendaId, String formaPagamento, {String? contaBancariaId}) async => {
     'sucesso': true,
   };
 
@@ -398,7 +463,28 @@ class FakeContasPagarRepository implements ContasPagarRepository {
   Future<Map<String, dynamic>> cadastrarContaPagar(Map<String, dynamic> dados) async => dados;
 
   @override
-  Future<void> marcarComoPago(String transacaoId) async {}
+  DateTime calcularVencimentoFatura({
+    required DateTime dataCompra,
+    required int diaFechamento,
+    required int diaVencimento,
+    required int numeroParcela,
+  }) => DateTime.now();
+
+  @override
+  Future<List<Map<String, dynamic>>> cadastrarDespesaParcelada(Map<String, dynamic> dados) async => [dados];
+
+  @override
+  Future<void> atualizarParcelaDespesa({
+    required String transacaoId,
+    required String novaDataVencimentoStr,
+    double? novoValor,
+    String? novaDescricao,
+    String? novaCategoriaId,
+    required bool aplicarEmTodasSeguintes,
+  }) async {}
+
+  @override
+  Future<void> marcarComoPago(String transacaoId, {String? contaBancariaId}) async {}
 
   @override
   Future<void> excluirContaPagar(String transacaoId) async {}
@@ -408,6 +494,11 @@ class FakeContasPagarRepository implements ContasPagarRepository {
 }
 
 void main() {
+  setUpAll(() async {
+    await initializeDateFormatting('pt_BR', null);
+    Intl.defaultLocale = 'pt_BR';
+  });
+
   testWidgets('CartSummaryPanel displays header, client selector and fiado options', (WidgetTester tester) async {
     final cubit = VendasCubit(repository: FakeVendasRepository());
     await cubit.carregarDadosIniciais();
@@ -451,6 +542,10 @@ void main() {
   });
 
   testWidgets('CartoesPage displays invoice and scope filter', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
     final cubit = CartoesCubit(repository: FakeCartoesRepository());
     await cubit.carregarCartoes();
 
@@ -464,7 +559,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('LANÇAR COMPRA NO CARTÃO'), findsOneWidget);
+    expect(find.text('REGISTRAR DESPESA NO CARTÃO'), findsOneWidget);
     expect(find.text('NOVO CARTÃO'), findsOneWidget);
   });
 
@@ -484,17 +579,17 @@ void main() {
 
     // Valida bloco de liquidez bancária
     expect(find.text('Liquidez Financeira Imediata • Contas Bancárias'), findsOneWidget);
-    expect(find.text('Saldo Disponível Clínica (PJ)'), findsOneWidget);
-    expect(find.text('Saldo Pessoal / Sócios (PF)'), findsOneWidget);
-    expect(find.text('Patrimônio Líquido (Total)'), findsOneWidget);
+    expect(find.text('Total de Saídas'), findsOneWidget);
+    expect(find.text('Total de Receitas'), findsOneWidget);
+    expect(find.text('Saldo Atual em Contas'), findsOneWidget);
     expect(find.text('VER CONTAS BANCÁRIAS'), findsOneWidget);
-    expect(find.text('+ ENTRADA / PIX'), findsOneWidget);
 
     expect(find.text('+ NOVA ENTRADA / PIX'), findsOneWidget);
     expect(find.text('ENTRADA DE ESTOQUE'), findsOneWidget);
     expect(find.text('NOVO GASTO AVULSO'), findsOneWidget);
     expect(find.text('Vendas Efetivadas (Recebidas)'), findsOneWidget);
     expect(find.text('Vendas a Receber (Pendentes)'), findsOneWidget);
+    expect(find.text('Resultado Operacional'), findsOneWidget);
   });
 
   testWidgets('LoginPage displays form, empty fields, and remember access checkbox', (WidgetTester tester) async {
@@ -555,10 +650,10 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Movimentações de Vendas & Contas a Receber'), findsOneWidget);
+    expect(find.text('Registro de Receitas'), findsOneWidget);
     expect(find.text('Todas'), findsOneWidget);
     expect(find.text('Juliana Costa'), findsOneWidget);
-    expect(find.text('Receber'), findsOneWidget);
+    expect(find.byTooltip('Receber / Liquidar'), findsWidgets);
   });
 
   testWidgets('ContasPagarPage displays status tabs and new expense button', (WidgetTester tester) async {
@@ -579,14 +674,14 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Contas a Pagar & Despesas Operacionais'), findsOneWidget);
+    expect(find.text('Registro de Despesas'), findsOneWidget);
     expect(find.text('Nova Despesa'), findsOneWidget);
     expect(find.text('Aluguel do Consultório'), findsOneWidget);
     expect(find.text('Pagar'), findsOneWidget);
   });
 
   testWidgets('MultiBlocProvider provides ContasPagarCubit and VendasHistoricoCubit without ProviderNotFoundError', (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.physicalSize = const Size(1280, 1600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
 
@@ -618,12 +713,14 @@ void main() {
   });
 
   testWidgets('MovimentacoesVendasPage and ContasPagarPage accept direct cubit parameter without external provider', (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.physicalSize = const Size(1280, 1600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
 
     final cpCubit = ContasPagarCubit(repository: FakeContasPagarRepository());
+    await cpCubit.carregarContas();
     final vhCubit = VendasHistoricoCubit(repository: FakeVendasHistoricoRepository());
+    await vhCubit.carregarVendas();
 
     await tester.pumpWidget(
       MaterialApp(
@@ -741,15 +838,14 @@ void main() {
 
     expect(find.byType(ContasBancariasPage), findsOneWidget);
     expect(find.text('Gestão de Contas Bancárias'), findsOneWidget);
-    expect(find.text('Saldo Total PJ (Clínica)'), findsOneWidget);
-    expect(find.text('Saldo Total PF (Pessoal/Sócios)'), findsOneWidget);
-    expect(find.text('Saldo Consolidado Total'), findsOneWidget);
+    expect(find.text('Saldo Total Consolidado'), findsOneWidget);
+    expect(find.text('Contas Bancárias Ativas'), findsOneWidget);
     expect(find.text('Nubank PJ Clínica'), findsOneWidget);
     expect(find.text('Inter PF Sócia'), findsOneWidget);
   });
 
   testWidgets('NovaReceitaDialog renders all form fields and submits new revenue', (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.physicalSize = const Size(1280, 1000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
 
@@ -811,8 +907,8 @@ void main() {
 
     // Verify modal elements
     expect(find.text('Nova Entrada / Receita Avulsa'), findsOneWidget);
-    expect(find.text('PJ • Clínica'), findsOneWidget);
-    expect(find.text('PF • Pessoal Sócios'), findsOneWidget);
+    expect(find.text('PJ (Clínica)'), findsOneWidget);
+    expect(find.text('PF (Dra. Camila)'), findsOneWidget);
     expect(find.text('Salvar e Creditar Receita'), findsOneWidget);
 
     // Fill fields
@@ -820,11 +916,54 @@ void main() {
     await tester.enterText(find.widgetWithText(TextFormField, 'Valor Recebido (R\$) *'), '500,00');
 
     // Submit form
-    await tester.tap(find.text('Salvar e Creditar Receita'), warnIfMissed: false);
+    final salvarBtn = find.text('Salvar e Creditar Receita');
+    await tester.ensureVisible(salvarBtn);
+    await tester.tap(salvarBtn);
     await tester.pumpAndSettle();
 
     // Dialog should be closed
     expect(find.byType(NovaReceitaDialog), findsNothing);
+  });
+
+  testWidgets('CockpitOperacoesPage displays quick actions, daily KPIs, financial summary, and calendar', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1366, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final cubit = OperacoesCubit(repository: FakeOperacoesRepository());
+    await cubit.carregarCockpit();
+    final authCubit = AuthCubit(repository: FakeAuthRepository());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('pt', 'BR'),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: authCubit),
+            BlocProvider.value(value: cubit),
+          ],
+          child: CockpitOperacoesPage(cubit: cubit),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Início'), findsOneWidget);
+    expect(find.text('Novo Agendamento'), findsOneWidget);
+    expect(find.text('Novo Cliente'), findsOneWidget);
+    expect(find.text('Nova Venda (PDV)'), findsOneWidget);
+    expect(find.text('Nova Despesa'), findsOneWidget);
+    expect(find.text('Saúde Financeira do Dia'), findsOneWidget);
+    expect(find.text('A RECEBER HOJE'), findsOneWidget);
+    expect(find.text('A PAGAR HOJE'), findsOneWidget);
+    expect(find.text('Resumo do Período Financeiro'), findsOneWidget);
+    expect(find.text('Aniversariantes da Semana'), findsOneWidget);
+    expect(find.text('Camila Ferreira'), findsOneWidget);
   });
 }
 

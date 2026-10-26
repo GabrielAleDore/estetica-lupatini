@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/utils/moeda_input_formatter.dart';
 
 class NovaDespesaCartaoDialog extends StatefulWidget {
   final List<Map<String, dynamic>> cartoes;
@@ -46,7 +47,7 @@ class _NovaDespesaCartaoDialogState extends State<NovaDespesaCartaoDialog> {
   }
 
   double get _valorTotal {
-    final v = double.tryParse(_valorController.text.trim().replaceAll(',', '.')) ?? 0.0;
+    final v = MoedaInputFormatter.parse(_valorController.text);
     return v > 0 ? v : 0.0;
   }
 
@@ -163,16 +164,20 @@ class _NovaDespesaCartaoDialogState extends State<NovaDespesaCartaoDialog> {
                       child: TextFormField(
                         controller: _valorController,
                         keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          MoedaInputFormatter(),
+                        ],
                         onChanged: (_) => setState(() {}),
                         decoration: const InputDecoration(
                           labelText: 'Valor Total (R\$) *',
-                          hintText: '1500.00',
+                          hintText: '0,00',
                           prefixIcon: Icon(Icons.attach_money),
+                          prefixText: 'R\$ ',
                           border: OutlineInputBorder(),
                         ),
                         validator: (v) {
-                          final n = double.tryParse((v ?? '').replaceAll(',', '.'));
-                          if (n == null || n <= 0) return 'Valor inválido';
+                          final n = MoedaInputFormatter.parse(v);
+                          if (n <= 0) return 'Informe um valor válido.';
                           return null;
                         },
                       ),

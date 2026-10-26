@@ -59,7 +59,7 @@ class DashboardState extends Equatable {
   });
 
   /// Totalizador de Receitas do Mês: Vendas Efetivadas + Entradas Avulsas Efetivadas
-  double get faturamentoTotalConsolidadoPJ => vendasEfetivadas + receitasAvulsasPJ;
+  double get faturamentoTotalConsolidadoPJ => vendasEfetivadas;
 
   DashboardState copyWith({
     DashboardStatus? status,

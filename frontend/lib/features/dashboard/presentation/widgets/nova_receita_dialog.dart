@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/utils/moeda_input_formatter.dart';
+import '../../../../core/utils/forma_pagamento_util.dart';
 import '../../../contas_bancarias/domain/models/conta_bancaria_model.dart';
 import '../../../contas_bancarias/presentation/cubit/contas_bancarias_cubit.dart';
 import '../../../contas_bancarias/data/contas_bancarias_repository.dart';
@@ -34,12 +36,16 @@ class _NovaReceitaDialogState extends State<NovaReceitaDialog> {
 
   late String _escopo; // 'PJ' ou 'PF'
   String _categoria = 'Receitas Extras';
-  String? _contaBancariaIdSelecionada;
+  String? _contaBancariaIdOrigem;
+  String? _contaBancariaIdDestino;
+  String _formaPagamento = 'PIX';
   bool _jaRecebido = true; // true = EFETIVADO, false = PENDENTE
   bool _isSalvando = false;
   bool _carregandoContas = false;
 
   List<ContaBancariaModel> _contasDisponiveis = [];
+
+  bool get _isTransferencia => _formaPagamento == 'TRANSFERENCIA';
 
   final List<String> _categoriasReceita = const [
     'Receitas Extras',
@@ -73,7 +79,6 @@ class _NovaReceitaDialogState extends State<NovaReceitaDialog> {
   Future<void> _carregarContasBancarias() async {
     setState(() => _carregandoContas = true);
     try {
-      // Tenta obter do Cubit se já estiver no contexto
       try {
         final cubit = context.read<ContasBancariasCubit>();
         final contas = cubit.state.contas;
@@ -84,7 +89,6 @@ class _NovaReceitaDialogState extends State<NovaReceitaDialog> {
         }
       } catch (_) {}
 
-      // Fallback para o repositório direto
       final repo = ContasBancariasRepository();
       final contas = await repo.getContas(apenasAtivas: true);
       if (mounted) {
@@ -101,18 +105,26 @@ class _NovaReceitaDialogState extends State<NovaReceitaDialog> {
 
   void _atualizarListaContas(List<ContaBancariaModel> contas) {
     _contasDisponiveis = contas.where((c) => c.ativo).toList();
-    _ajustarContaSelecionada();
+    _ajustarContasSelecionadas();
   }
 
-  void _ajustarContaSelecionada() {
-    final contasDoEscopo = _contasDisponiveis.where((c) => c.escopo == _escopo).toList();
-    if (contasDoEscopo.isNotEmpty) {
-      if (_contaBancariaIdSelecionada == null ||
-          !contasDoEscopo.any((c) => c.id == _contaBancariaIdSelecionada)) {
-        _contaBancariaIdSelecionada = contasDoEscopo.first.id;
+  void _ajustarContasSelecionadas() {
+    if (_contasDisponiveis.isNotEmpty) {
+      if (_contaBancariaIdOrigem == null ||
+          !_contasDisponiveis.any((c) => c.id == _contaBancariaIdOrigem)) {
+        _contaBancariaIdOrigem = _contasDisponiveis.first.id;
+      }
+      if (_contaBancariaIdDestino == null ||
+          !_contasDisponiveis.any((c) => c.id == _contaBancariaIdDestino)) {
+        if (_contasDisponiveis.length > 1) {
+          _contaBancariaIdDestino = _contasDisponiveis[1].id;
+        } else {
+          _contaBancariaIdDestino = _contasDisponiveis.first.id;
+        }
       }
     } else {
-      _contaBancariaIdSelecionada = null;
+      _contaBancariaIdOrigem = null;
+      _contaBancariaIdDestino = null;
     }
   }
 
@@ -140,25 +152,80 @@ class _NovaReceitaDialogState extends State<NovaReceitaDialog> {
   Future<void> _submeter() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final valor = MoedaInputFormatter.parse(_valorController.text);
+
+    if (_isTransferencia) {
+      if (_contasDisponiveis.length < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('São necessárias pelo menos 2 contas bancárias ativas para realizar uma transferência.'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+        return;
+      }
+      if (_contaBancariaIdOrigem == null || _contaBancariaIdDestino == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Selecione a conta de origem e a conta de destino.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+      if (_contaBancariaIdOrigem == _contaBancariaIdDestino) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('A conta de origem e a conta de destino não podem ser a mesma.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() => _isSalvando = true);
 
-    final valor = double.parse(_valorController.text.trim().replaceAll(',', '.'));
-    final status = _jaRecebido ? 'EFETIVADO' : 'PENDENTE';
+    final status = _jaRecebido ? 'PAGO' : 'PENDENTE';
 
-    final dados = {
-      'descricao': _descricaoController.text.trim(),
-      'tipo': 'RECEITA',
-      'escopo': _escopo,
-      'categoria_nome': _categoria,
-      'valor': valor,
-      'valor_total': valor,
-      'data_transacao': _dataController.text.trim(),
-      'data_competencia': _dataController.text.trim(),
-      'status': status,
-      'conta_bancaria_id': _contaBancariaIdSelecionada,
-      'observacoes': _observacoesController.text.trim().isEmpty ? null : _observacoesController.text.trim(),
-      'origem': 'MANUAL',
-    };
+    final dados = _isTransferencia
+        ? {
+            'descricao': _descricaoController.text.trim().isEmpty
+                ? 'Transferência entre Contas'
+                : _descricaoController.text.trim(),
+            'tipo': 'ENTRADA',
+            'escopo': _escopo,
+            'categoria_nome': 'Transferência entre Contas',
+            'valor': valor,
+            'valor_total': valor,
+            'data_transacao': _dataController.text.trim(),
+            'data_competencia': _dataController.text.trim(),
+            'data_vencimento': _dataController.text.trim(),
+            'status': 'PAGO',
+            'forma_pagamento': 'TRANSFERENCIA',
+            'is_transferencia': true,
+            'conta_origem_id': _contaBancariaIdOrigem,
+            'conta_destino_id': _contaBancariaIdDestino,
+            'conta_bancaria_id': _contaBancariaIdDestino,
+            'observacoes': _observacoesController.text.trim().isEmpty ? null : _observacoesController.text.trim(),
+            'origem': 'MANUAL',
+          }
+        : {
+            'descricao': _descricaoController.text.trim(),
+            'tipo': 'ENTRADA',
+            'escopo': _escopo,
+            'categoria_nome': _categoria,
+            'valor': valor,
+            'valor_total': valor,
+            'data_transacao': _dataController.text.trim(),
+            'data_competencia': _dataController.text.trim(),
+            'data_vencimento': _dataController.text.trim(),
+            'status': status,
+            'conta_bancaria_id': _contaBancariaIdDestino,
+            'observacoes': _observacoesController.text.trim().isEmpty ? null : _observacoesController.text.trim(),
+            'origem': 'MANUAL',
+            'forma_pagamento': _formaPagamento,
+          };
 
     final sucesso = await widget.onSalvar(dados);
     if (mounted) {
@@ -169,9 +236,6 @@ class _NovaReceitaDialogState extends State<NovaReceitaDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isPj = _escopo == 'PJ';
-    final contasDoEscopo = _contasDisponiveis.where((c) => c.escopo == _escopo).toList();
-
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
@@ -193,31 +257,32 @@ class _NovaReceitaDialogState extends State<NovaReceitaDialog> {
                         child: Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(10),
+                              padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: AppColors.success.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(10),
+                                color: _isTransferencia
+                                    ? Colors.blue.withValues(alpha: 0.15)
+                                    : AppColors.success.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Icon(
-                                Icons.add_card,
-                                color: AppColors.success,
-                                size: 24,
+                              child: Icon(
+                                _isTransferencia ? Icons.swap_horiz_rounded : Icons.add_circle_outline,
+                                color: _isTransferencia ? AppColors.primary : AppColors.success,
                               ),
                             ),
                             const SizedBox(width: 12),
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Nova Entrada / Receita Avulsa',
-                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis,
+                                    _isTransferencia ? 'Transferência entre Contas' : 'Nova Entrada / Receita Avulsa',
+                                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                                   ),
                                   Text(
-                                    'Registro de PIX, aportes de sócios e receitas extras',
-                                    style: TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
-                                    overflow: TextOverflow.ellipsis,
+                                    _isTransferencia
+                                        ? 'Movimentação entre contas com débito e crédito automático'
+                                        : 'Registro de PIX, aportes de sócios e receitas extras',
+                                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryLight),
                                   ),
                                 ],
                               ),
@@ -233,81 +298,41 @@ class _NovaReceitaDialogState extends State<NovaReceitaDialog> {
                   ),
                   const Divider(height: 24),
 
-                  // Seletor de Escopo: PJ vs PF
-                  const Text(
-                    'Regime / Destinação Financeira *',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
+                  // Seletor de Escopo (PJ vs PF)
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 6,
                     children: [
-                      Expanded(
-                        child: ChoiceChip(
-                          avatar: Icon(
-                            Icons.business,
-                            size: 16,
-                            color: isPj ? Colors.white : AppColors.pjClinical,
-                          ),
-                          label: Text(
-                            'PJ • Clínica',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: isPj ? Colors.white : AppColors.pjClinical,
-                            ),
-                          ),
-                          selected: isPj,
-                          selectedColor: AppColors.pjClinical,
-                          backgroundColor: Colors.white,
-                          side: BorderSide(color: AppColors.pjClinical.withValues(alpha: 0.5)),
-                          onSelected: (_) {
-                            setState(() {
-                              _escopo = 'PJ';
-                              _ajustarContaSelecionada();
-                            });
-                          },
-                        ),
+                      const Text('Destino do Recurso: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ChoiceChip(
+                        label: const Text('PJ (Clínica)'),
+                        selected: _escopo == 'PJ',
+                        onSelected: (val) => setState(() => _escopo = 'PJ'),
+                        selectedColor: AppColors.pjClinical.withValues(alpha: 0.2),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ChoiceChip(
-                          avatar: Icon(
-                            Icons.person,
-                            size: 16,
-                            color: !isPj ? Colors.white : const Color(0xFFB07D4F),
-                          ),
-                          label: Text(
-                            'PF • Pessoal Sócios',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: !isPj ? Colors.white : const Color(0xFFB07D4F),
-                            ),
-                          ),
-                          selected: !isPj,
-                          selectedColor: const Color(0xFFB07D4F),
-                          backgroundColor: Colors.white,
-                          side: BorderSide(color: const Color(0xFFB07D4F).withValues(alpha: 0.5)),
-                          onSelected: (_) {
-                            setState(() {
-                              _escopo = 'PF';
-                              _ajustarContaSelecionada();
-                            });
-                          },
-                        ),
+                      ChoiceChip(
+                        label: const Text('PF (Dra. Camila)'),
+                        selected: _escopo == 'PF',
+                        onSelected: (val) => setState(() => _escopo = 'PF'),
+                        selectedColor: AppColors.pfPersonal.withValues(alpha: 0.2),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
                   // Descrição
                   TextFormField(
                     controller: _descricaoController,
-                    decoration: const InputDecoration(
-                      labelText: 'Descrição da Receita *',
-                      hintText: 'Ex: Recebimento PIX - Consultoria, Aporte Inicial',
-                      prefixIcon: Icon(Icons.description_outlined),
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: _isTransferencia ? 'Descrição da Transferência *' : 'Descrição da Receita *',
+                      hintText: _isTransferencia
+                          ? 'Ex: Transferência Caixa Físico para Nubank'
+                          : 'Ex: Aporte inicial de sócio, Parceria estética...',
+                      prefixIcon: Icon(_isTransferencia ? Icons.swap_horiz : Icons.edit_note),
+                      border: const OutlineInputBorder(),
                     ),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Informe a descrição da receita.' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Informe a descrição.' : null,
                   ),
                   const SizedBox(height: 14),
 
@@ -317,16 +342,20 @@ class _NovaReceitaDialogState extends State<NovaReceitaDialog> {
                       Expanded(
                         child: TextFormField(
                           controller: _valorController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(
-                            labelText: 'Valor Recebido (R\$) *',
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            MoedaInputFormatter(),
+                          ],
+                          decoration: InputDecoration(
+                            labelText: _isTransferencia ? 'Valor a Transferir (R\$) *' : 'Valor Recebido (R\$) *',
                             hintText: '0,00',
-                            prefixIcon: Icon(Icons.attach_money),
-                            border: OutlineInputBorder(),
+                            prefixIcon: const Icon(Icons.attach_money),
+                            prefixText: 'R\$ ',
+                            border: const OutlineInputBorder(),
                           ),
                           validator: (v) {
-                            final n = double.tryParse((v ?? '').replaceAll(',', '.'));
-                            if (n == null || n <= 0) return 'Valor inválido';
+                            final n = MoedaInputFormatter.parse(v);
+                            if (n <= 0) return 'Informe um valor válido.';
                             return null;
                           },
                         ),
@@ -338,11 +367,11 @@ class _NovaReceitaDialogState extends State<NovaReceitaDialog> {
                           child: IgnorePointer(
                             child: TextFormField(
                               controller: _dataController,
-                              decoration: const InputDecoration(
-                                labelText: 'Data do Recebimento *',
-                                prefixIcon: Icon(Icons.calendar_today_outlined),
-                                suffixIcon: Icon(Icons.arrow_drop_down),
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                labelText: _isTransferencia ? 'Data da Transferência *' : 'Data do Recebimento *',
+                                prefixIcon: const Icon(Icons.calendar_today_outlined),
+                                suffixIcon: const Icon(Icons.arrow_drop_down),
+                                border: const OutlineInputBorder(),
                               ),
                             ),
                           ),
@@ -352,97 +381,237 @@ class _NovaReceitaDialogState extends State<NovaReceitaDialog> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Categoria da Receita
+                  // Categoria da Receita (oculta se for transferência)
+                  if (!_isTransferencia) ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: _categoria,
+                      decoration: const InputDecoration(
+                        labelText: 'Categoria de Receita *',
+                        prefixIcon: Icon(Icons.category_outlined),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _categoriasReceita.map((cat) {
+                        return DropdownMenuItem(value: cat, child: Text(cat));
+                      }).toList(),
+                      onChanged: (v) => setState(() => _categoria = v!),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // Forma de Recebimento
                   DropdownButtonFormField<String>(
-                    initialValue: _categoria,
+                    isExpanded: true,
+                    initialValue: _formaPagamento,
                     decoration: const InputDecoration(
-                      labelText: 'Categoria de Receita *',
-                      prefixIcon: Icon(Icons.category_outlined),
+                      labelText: 'Forma de Recebimento / Movimentação *',
                       border: OutlineInputBorder(),
                     ),
-                    items: _categoriasReceita.map((cat) {
-                      return DropdownMenuItem(value: cat, child: Text(cat));
-                    }).toList(),
-                    onChanged: (v) => setState(() => _categoria = v!),
+                    items: FormaPagamentoUtil.itens(FormaPagamentoUtil.codigosReceita),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() {
+                          _formaPagamento = v;
+                          _ajustarContasSelecionadas();
+                        });
+                      }
+                    },
                   ),
                   const SizedBox(height: 14),
 
-                  // Conta Bancária de Destino
-                  _carregandoContas
-                      ? const LinearProgressIndicator()
-                      : DropdownButtonFormField<String>(
-                          initialValue: _contaBancariaIdSelecionada,
-                          decoration: InputDecoration(
-                            labelText: 'Conta Bancária de Destino *',
-                            prefixIcon: const Icon(Icons.account_balance),
-                            border: const OutlineInputBorder(),
-                            helperText: contasDoEscopo.isEmpty
-                                ? 'Nenhuma conta $_escopo ativa cadastrada'
-                                : 'O saldo desta conta será creditado imediatamente',
-                            helperStyle: TextStyle(
-                              color: contasDoEscopo.isEmpty ? AppColors.warning : AppColors.textSecondaryLight,
+                  // CONTAS BANCÁRIAS:
+                  // Se for TRANSFERÊNCIA: exibe Origem (Débito) e Destino (Crédito)
+                  // Se for normal: exibe apenas Destino (Crédito)
+                  if (_isTransferencia) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.compare_arrows, color: AppColors.primary, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Contas da Transferência',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue.shade900),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          // 1. Conta de Origem
+                          DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            initialValue: _contaBancariaIdOrigem,
+                            decoration: const InputDecoration(
+                              labelText: 'Conta Bancária de Origem (De onde SAI) *',
+                              prefixIcon: Icon(Icons.arrow_upward, color: AppColors.error),
+                              helperText: 'O saldo desta conta será DEBITADO (-)',
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                            ),
+                            items: _contasDisponiveis.map((conta) {
+                              return DropdownMenuItem(
+                                value: conta.id,
+                                child: Row(
+                                  children: [
+                                    Text(conta.nomeConta, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    const SizedBox(width: 6),
+                                    Text('(${conta.bancoNome})', style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight)),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              setState(() => _contaBancariaIdOrigem = val);
+                            },
+                            validator: (v) => (v == null || v.isEmpty) ? 'Selecione a conta de origem.' : null,
+                          ),
+
+                          const SizedBox(height: 8),
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.arrow_downward, color: AppColors.primary, size: 18),
                             ),
                           ),
-                          items: contasDoEscopo.map((conta) {
-                            return DropdownMenuItem(
-                              value: conta.id,
-                              child: Row(
-                                children: [
-                                  Text(
-                                    conta.nomeConta,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '(${conta.bancoNome})',
-                                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: contasDoEscopo.isEmpty
-                              ? null
-                              : (val) {
-                                  setState(() => _contaBancariaIdSelecionada = val);
-                                },
-                          validator: (v) {
-                            if (contasDoEscopo.isNotEmpty && (v == null || v.isEmpty)) {
-                              return 'Selecione a conta bancária de destino.';
-                            }
-                            return null;
-                          },
-                        ),
-                  const SizedBox(height: 12),
+                          const SizedBox(height: 8),
 
-                  // Status de Liquidação (Já Recebido vs A Receber)
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      _jaRecebido ? 'Já Recebido (Efetivado no Caixa/Banco)' : 'A Receber (Pendente)',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          // 2. Conta de Destino
+                          DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            initialValue: _contaBancariaIdDestino,
+                            decoration: const InputDecoration(
+                              labelText: 'Conta Bancária de Destino (Para onde VAI) *',
+                              prefixIcon: Icon(Icons.arrow_downward, color: AppColors.success),
+                              helperText: 'O saldo desta conta será CREDITADO (+)',
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                            ),
+                            items: _contasDisponiveis.map((conta) {
+                              return DropdownMenuItem(
+                                value: conta.id,
+                                child: Row(
+                                  children: [
+                                    Text(conta.nomeConta, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    const SizedBox(width: 6),
+                                    Text('(${conta.bancoNome})', style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight)),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              setState(() => _contaBancariaIdDestino = val);
+                            },
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Selecione a conta de destino.';
+                              if (v == _contaBancariaIdOrigem) return 'Conta de destino não pode ser igual à de origem.';
+                              return null;
+                            },
+                          ),
+
+                          if (_contaBancariaIdOrigem != null && _contaBancariaIdOrigem == _contaBancariaIdDestino) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              '⚠️ A conta de origem e destino devem ser diferentes.',
+                              style: TextStyle(color: Colors.red.shade800, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                    subtitle: Text(
-                      _jaRecebido
-                          ? 'O saldo bancário e as receitas serão creditados no mesmo instante.'
-                          : 'Ficará registrado como previsão pendente até ser liquidado.',
-                      style: const TextStyle(fontSize: 11),
+                    const SizedBox(height: 12),
+                  ] else ...[
+                    // Modo padrão de Receita: única conta destino
+                    _carregandoContas
+                        ? const LinearProgressIndicator()
+                        : DropdownButtonFormField<String>(
+                            initialValue: _contaBancariaIdDestino,
+                            decoration: InputDecoration(
+                              labelText: 'Conta Bancária de Destino *',
+                              prefixIcon: const Icon(Icons.account_balance),
+                              border: const OutlineInputBorder(),
+                              helperText: _contasDisponiveis.isEmpty
+                                  ? 'Nenhuma conta bancária ativa cadastrada'
+                                  : 'O saldo desta conta será creditado imediatamente',
+                              helperStyle: TextStyle(
+                                color: _contasDisponiveis.isEmpty ? AppColors.warning : AppColors.textSecondaryLight,
+                              ),
+                            ),
+                            items: _contasDisponiveis.map((conta) {
+                              return DropdownMenuItem(
+                                value: conta.id,
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      conta.nomeConta,
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '(${conta.bancoNome})',
+                                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondaryLight),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: _contasDisponiveis.isEmpty
+                                ? null
+                                : (val) {
+                                    setState(() => _contaBancariaIdDestino = val);
+                                  },
+                            validator: (v) {
+                              if (_contasDisponiveis.isNotEmpty && (v == null || v.isEmpty)) {
+                                return 'Selecione a conta bancária de destino.';
+                              }
+                              return null;
+                            },
+                          ),
+                    const SizedBox(height: 12),
+
+                    // Status de Liquidação (Já Recebido vs A Receber)
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        _jaRecebido ? 'Já Recebido (Efetivado no Caixa/Banco)' : 'A Receber (Pendente)',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      subtitle: Text(
+                        _jaRecebido
+                            ? 'O saldo bancário e as receitas serão creditados no mesmo instante.'
+                            : 'Ficará registrado como previsão pendente até ser liquidado.',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      value: _jaRecebido,
+                      activeThumbColor: AppColors.success,
+                      onChanged: (val) => setState(() => _jaRecebido = val),
                     ),
-                    value: _jaRecebido,
-                    activeThumbColor: AppColors.success,
-                    onChanged: (val) => setState(() => _jaRecebido = val),
-                  ),
-                  const SizedBox(height: 10),
+                    const SizedBox(height: 10),
+                  ],
 
                   // Observações
                   TextFormField(
                     controller: _observacoesController,
                     maxLines: 2,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Observações (Opcional)',
-                      hintText: 'Número do comprovante PIX, detalhes do pagador, etc.',
-                      prefixIcon: Icon(Icons.notes_outlined),
-                      border: OutlineInputBorder(),
+                      hintText: _isTransferencia
+                          ? 'Motivo da transferência, código do TED/DOC, etc.'
+                          : 'Número do comprovante PIX, detalhes do pagador, etc.',
+                      prefixIcon: const Icon(Icons.notes_outlined),
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -468,13 +637,16 @@ class _NovaReceitaDialogState extends State<NovaReceitaDialog> {
                                   height: 16,
                                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                                 )
-                              : const Icon(Icons.check_circle_outline, size: 18),
-                          label: const Text(
-                            'Salvar e Creditar Receita',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                              : Icon(
+                                  _isTransferencia ? Icons.swap_horiz : Icons.check_circle_outline,
+                                  size: 18,
+                                ),
+                          label: Text(
+                            _isTransferencia ? 'Confirmar Transferência' : 'Salvar e Creditar Receita',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.success,
+                            backgroundColor: _isTransferencia ? AppColors.primary : AppColors.success,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                           ),

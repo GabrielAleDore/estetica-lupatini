@@ -8,6 +8,7 @@ class ContasPagarState extends Equatable {
   final List<Map<String, dynamic>> categorias;
   final String filtroAba; // 'TODAS', 'PENDENTE', 'PAGO', 'VENCIDAS'
   final String filtroEscopo; // 'TODOS', 'PJ', 'PF'
+  final String filtroMes; // 'TODOS' ou 'yyyy-MM'
   final String? errorMessage;
   final String? successMessage;
 
@@ -17,17 +18,25 @@ class ContasPagarState extends Equatable {
     this.categorias = const [],
     this.filtroAba = 'PENDENTE',
     this.filtroEscopo = 'TODOS',
+    this.filtroMes = 'TODOS',
     this.errorMessage,
     this.successMessage,
   });
 
-  double get totalPendentePj => contas
-      .where((c) => c['status'] == 'PENDENTE' && c['escopo'] == 'PJ')
+  double get totalPendenteGeral => contas
+      .where((c) => c['status'] == 'PENDENTE')
       .fold(0.0, (acc, c) => acc + ((c['valor_total'] as num?)?.toDouble() ?? 0.0));
 
-  double get totalPendentePf => contas
-      .where((c) => c['status'] == 'PENDENTE' && c['escopo'] == 'PF')
-      .fold(0.0, (acc, c) => acc + ((c['valor_total'] as num?)?.toDouble() ?? 0.0));
+  double get totalVencidasGeral {
+    final hojeStr = DateTime.now().toIso8601String().substring(0, 10);
+    return contas
+        .where((c) => c['status'] == 'PENDENTE' && (c['data_vencimento']?.toString() ?? '').isNotEmpty && (c['data_vencimento']?.toString() ?? '').compareTo(hojeStr) < 0)
+        .fold(0.0, (acc, c) => acc + ((c['valor_total'] as num?)?.toDouble() ?? 0.0));
+  }
+
+  double get totalPendentePj => totalPendenteGeral;
+
+  double get totalPendentePf => 0.0;
 
   double get totalPagoMes => contas
       .where((c) => c['status'] == 'PAGO')
@@ -40,6 +49,14 @@ class ContasPagarState extends Equatable {
       // Filtro por escopo
       if (filtroEscopo != 'TODOS' && c['escopo'] != filtroEscopo) {
         return false;
+      }
+
+      // Filtro por mês de vencimento
+      if (filtroMes != 'TODOS') {
+        final venc = c['data_vencimento']?.toString() ?? '';
+        if (!venc.startsWith(filtroMes)) {
+          return false;
+        }
       }
 
       // Filtro por aba
@@ -61,6 +78,7 @@ class ContasPagarState extends Equatable {
     List<Map<String, dynamic>>? categorias,
     String? filtroAba,
     String? filtroEscopo,
+    String? filtroMes,
     String? errorMessage,
     String? successMessage,
     bool clearMessages = false,
@@ -71,6 +89,7 @@ class ContasPagarState extends Equatable {
       categorias: categorias ?? this.categorias,
       filtroAba: filtroAba ?? this.filtroAba,
       filtroEscopo: filtroEscopo ?? this.filtroEscopo,
+      filtroMes: filtroMes ?? this.filtroMes,
       errorMessage: clearMessages ? null : (errorMessage ?? this.errorMessage),
       successMessage: clearMessages ? null : (successMessage ?? this.successMessage),
     );
@@ -83,6 +102,7 @@ class ContasPagarState extends Equatable {
         categorias,
         filtroAba,
         filtroEscopo,
+        filtroMes,
         errorMessage,
         successMessage,
       ];

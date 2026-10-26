@@ -2,9 +2,9 @@ class AppConstants {
   static const String appTitle = 'Estética Lupatini';
   static const String appSubtitle = 'Gestão Clínica & Fluxo Financeiro Híbrido';
   
-  // Credenciais Oficiais Pré-Configuradas (Fallback Inteligente de Produção)
+  // Credenciais Oficiais Pré-Configuradas (Chave Pública Anon de Produção)
   static const String _defaultUrl = 'https://qfphiraxxyknhvqjcyrt.supabase.co';
-  static const String _defaultAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmcGhpcmF4eHlrbmh2cWpjeXJ0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4OTM0NTE2OCwiZXhwIjoyMTA0OTIxMTY4fQ.345MI-B4CjjjJpSQkfxwD5931E_Uk9KoD8UgQuue768';
+  static const String _defaultAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmcGhpcmF4eHlrbmh2cWpjeXJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzNDUxNjgsImV4cCI6MjEwNDkyMTE2OH0.H9fTwL_eddCQoSKJuBH8_yp-BEBt9_ve462yvtRSa58';
 
   // Suporte flexível a --dart-define=SUPABASE_URL=...
   static const String _envUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: '');

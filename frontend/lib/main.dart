@@ -11,6 +11,7 @@ import 'features/contas_pagar/presentation/cubit/contas_pagar_cubit.dart';
 import 'features/contas_bancarias/presentation/cubit/contas_bancarias_cubit.dart';
 import 'features/vendas/presentation/cubit/vendas_historico_cubit.dart';
 import 'features/vendas/presentation/cubit/vendas_cubit.dart';
+import 'features/operacoes/presentation/cubit/operacoes_cubit.dart';
 import 'features/shell/main_navigation_shell.dart';
 
 void main() async {
@@ -30,6 +31,9 @@ class EsteticaLupatiniApp extends StatelessWidget {
       providers: [
         BlocProvider<AuthCubit>(
           create: (_) => AuthCubit()..verificarSessaoInicial(),
+        ),
+        BlocProvider<OperacoesCubit>(
+          create: (_) => OperacoesCubit()..carregarCockpit(),
         ),
         BlocProvider<VendasCubit>(
           create: (_) => VendasCubit()..carregarDadosIniciais(),

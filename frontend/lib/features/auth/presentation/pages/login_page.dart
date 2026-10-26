@@ -73,7 +73,7 @@ class _LoginPageState extends State<LoginPage> {
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Por favor, informe seu e-mail de acesso.'),
+          content: Text('Por favor, informe seu usuário ou e-mail de acesso.'),
           backgroundColor: AppColors.warning,
           behavior: SnackBarBehavior.floating,
           duration: Duration(seconds: 2),
@@ -96,9 +96,9 @@ class _LoginPageState extends State<LoginPage> {
 
     if (_formKey.currentState?.validate() ?? false) {
       final sucesso = await context.read<AuthCubit>().login(
-        email: email,
-        password: senha,
-      );
+            email: email,
+            password: senha,
+          );
 
       if (sucesso) {
         try {
@@ -127,7 +127,8 @@ class _LoginPageState extends State<LoginPage> {
             child: Card(
               elevation: 4,
               shadowColor: Colors.black.withValues(alpha: 0.08),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               color: Colors.white,
               child: Padding(
                 padding: const EdgeInsets.all(32),
@@ -146,7 +147,8 @@ class _LoginPageState extends State<LoginPage> {
                             color: AppColors.primary.withValues(alpha: 0.12),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.spa, size: 36, color: AppColors.primary),
+                          child: const Icon(Icons.spa,
+                              size: 36, color: AppColors.primary),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -183,16 +185,20 @@ class _LoginPageState extends State<LoginPage> {
                               decoration: BoxDecoration(
                                 color: AppColors.error.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                                border: Border.all(
+                                    color:
+                                        AppColors.error.withValues(alpha: 0.3)),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.error_outline, size: 18, color: AppColors.error),
+                                  const Icon(Icons.error_outline,
+                                      size: 18, color: AppColors.error),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       state.errorMessage!,
-                                      style: const TextStyle(fontSize: 12, color: AppColors.error),
+                                      style: const TextStyle(
+                                          fontSize: 12, color: AppColors.error),
                                     ),
                                   ),
                                 ],
@@ -203,19 +209,19 @@ class _LoginPageState extends State<LoginPage> {
                         },
                       ),
 
-                      // Campo de E-mail
+                      // Campo de Usuário ou E-mail
                       TextFormField(
                         controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
+                        keyboardType: TextInputType.text,
                         decoration: const InputDecoration(
-                          labelText: 'E-mail do Colaborador',
-                          hintText: 'exemplo@lupatini.com',
-                          prefixIcon: Icon(Icons.email_outlined, size: 20),
+                          labelText: 'Usuário ou E-mail',
+                          hintText: 'seu e-mail',
+                          prefixIcon: Icon(Icons.person_outline, size: 20),
                           border: OutlineInputBorder(),
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Informe o e-mail cadastrado';
+                            return 'Informe seu usuário ou e-mail cadastrado';
                           }
                           return null;
                         },
@@ -233,10 +239,13 @@ class _LoginPageState extends State<LoginPage> {
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                               size: 20,
                             ),
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                            onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword),
                           ),
                         ),
                         onFieldSubmitted: (_) => _fazerLogin(),
@@ -264,7 +273,8 @@ class _LoginPageState extends State<LoginPage> {
                                 child: Checkbox(
                                   value: _lembrarAcesso,
                                   activeColor: AppColors.primary,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(4)),
                                   onChanged: _onLembrarAcessoChanged,
                                 ),
                               ),
@@ -293,17 +303,21 @@ class _LoginPageState extends State<LoginPage> {
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
                             ),
                             child: isLoading
                                 ? const SizedBox(
                                     height: 20,
                                     width: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: Colors.white),
                                   )
                                 : const Text(
                                     'Entrar no Sistema',
-                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold),
                                   ),
                           );
                         },
@@ -316,7 +330,8 @@ class _LoginPageState extends State<LoginPage> {
                           'Ambiente Seguro • Estética Lupatini',
                           style: TextStyle(
                             fontSize: 11,
-                            color: AppColors.textSecondaryLight.withValues(alpha: 0.8),
+                            color: AppColors.textSecondaryLight
+                                .withValues(alpha: 0.8),
                           ),
                         ),
                       ),

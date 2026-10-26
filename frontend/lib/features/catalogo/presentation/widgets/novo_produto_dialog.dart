@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/utils/moeda_input_formatter.dart';
 
 class NovoProdutoDialog extends StatefulWidget {
   final Map<String, dynamic>? produtoParaEditar;
@@ -40,10 +41,10 @@ class _NovoProdutoDialogState extends State<NovoProdutoDialog> {
     _nomeController = TextEditingController(text: p?['nome'] ?? '');
     _skuController = TextEditingController(text: p?['codigo_barras'] ?? '');
     _precoCustoController = TextEditingController(
-      text: p != null ? (double.tryParse(p['preco_custo']?.toString() ?? '0') ?? 0.0).toStringAsFixed(2) : '0.00',
+      text: MoedaInputFormatter.formatar(double.tryParse(p?['preco_custo']?.toString() ?? '') ?? 0.0),
     );
     _precoVendaController = TextEditingController(
-      text: p != null ? (double.tryParse(p['preco_venda']?.toString() ?? '0') ?? 0.0).toStringAsFixed(2) : '50.00',
+      text: MoedaInputFormatter.formatar(double.tryParse(p?['preco_venda']?.toString() ?? '') ?? 50.0),
     );
     _estoqueController = TextEditingController(
       text: p != null ? (double.tryParse(p['quantidade_estoque']?.toString() ?? '0') ?? 0.0).toString() : '10',
@@ -71,8 +72,8 @@ class _NovoProdutoDialogState extends State<NovoProdutoDialog> {
     setState(() => _erroInline = null);
     if (!_formKey.currentState!.validate()) return;
 
-    final custo = double.tryParse(_precoCustoController.text.trim().replaceAll(',', '.')) ?? 0.0;
-    final venda = double.tryParse(_precoVendaController.text.trim().replaceAll(',', '.')) ?? 0.0;
+    final custo = MoedaInputFormatter.parse(_precoCustoController.text);
+    final venda = MoedaInputFormatter.parse(_precoVendaController.text);
     final estoque = double.tryParse(_estoqueController.text.trim().replaceAll(',', '.')) ?? 0.0;
     final estoqueMin = double.tryParse(_estoqueMinimoController.text.trim().replaceAll(',', '.')) ?? 5.0;
     final sku = _skuController.text.trim();
@@ -240,14 +241,18 @@ class _NovoProdutoDialogState extends State<NovoProdutoDialog> {
                             Expanded(
                               child: TextFormField(
                                 controller: _precoCustoController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  MoedaInputFormatter(),
+                                ],
                                 decoration: const InputDecoration(
                                   labelText: 'Preço de Custo (R\$) *',
-                                  hintText: '25.00',
+                                  hintText: '0,00',
                                   prefixIcon: Icon(Icons.money_off_outlined),
+                                  prefixText: 'R\$ ',
                                   border: OutlineInputBorder(),
                                 ),
-                                validator: (v) => (v == null || double.tryParse(v.replaceAll(',', '.')) == null)
+                                validator: (v) => (v == null || MoedaInputFormatter.parse(v) < 0)
                                     ? 'Custo inválido.'
                                     : null,
                               ),
@@ -256,14 +261,18 @@ class _NovoProdutoDialogState extends State<NovoProdutoDialog> {
                             Expanded(
                               child: TextFormField(
                                 controller: _precoVendaController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  MoedaInputFormatter(),
+                                ],
                                 decoration: const InputDecoration(
                                   labelText: 'Preço de Venda (R\$) *',
-                                  hintText: '69.90',
+                                  hintText: '0,00',
                                   prefixIcon: Icon(Icons.attach_money),
+                                  prefixText: 'R\$ ',
                                   border: OutlineInputBorder(),
                                 ),
-                                validator: (v) => (v == null || double.tryParse(v.replaceAll(',', '.')) == null)
+                                validator: (v) => (v == null || MoedaInputFormatter.parse(v) <= 0)
                                     ? 'Preço de venda inválido.'
                                     : null,
                               ),

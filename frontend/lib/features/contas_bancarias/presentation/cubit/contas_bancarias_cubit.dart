@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../data/contas_bancarias_repository.dart';
 import '../../domain/models/conta_bancaria_model.dart';
@@ -5,14 +6,28 @@ import 'contas_bancarias_state.dart';
 
 class ContasBancariasCubit extends Cubit<ContasBancariasState> {
   final ContasBancariasRepository _repository;
+  StreamSubscription? _streamSubscription;
 
   ContasBancariasCubit({ContasBancariasRepository? repository})
       : _repository = repository ?? ContasBancariasRepository(),
-        super(const ContasBancariasState());
+        super(const ContasBancariasState()) {
+    _iniciarEscutaRealtime();
+  }
+
+  void _iniciarEscutaRealtime() {
+    try {
+      _streamSubscription = _repository.streamContas().listen((_) {
+        // Atualiza a lista e saldos de forma silenciosa e reativa
+        carregarContas(silencioso: true);
+      }, onError: (_) {});
+    } catch (_) {}
+  }
 
   /// Carrega a lista completa de contas bancárias
-  Future<void> carregarContas() async {
-    emit(state.copyWith(status: ContasBancariasStatus.loading, clearMessages: true));
+  Future<void> carregarContas({bool silencioso = false}) async {
+    if (!silencioso) {
+      emit(state.copyWith(status: ContasBancariasStatus.loading, clearMessages: true));
+    }
     try {
       final contas = await _repository.getContas();
       emit(state.copyWith(
@@ -20,10 +35,12 @@ class ContasBancariasCubit extends Cubit<ContasBancariasState> {
         contas: contas,
       ));
     } catch (e) {
-      emit(state.copyWith(
-        status: ContasBancariasStatus.error,
-        errorMessage: 'Não foi possível carregar as contas bancárias: $e',
-      ));
+      if (!silencioso) {
+        emit(state.copyWith(
+          status: ContasBancariasStatus.error,
+          errorMessage: 'Não foi possível carregar as contas bancárias: $e',
+        ));
+      }
     }
   }
 
@@ -124,5 +141,31 @@ class ContasBancariasCubit extends Cubit<ContasBancariasState> {
       ));
       return false;
     }
+  }
+
+  /// Recalcula e reconcilia o saldo atual da conta bancária no banco de dados com base nas transações
+  Future<bool> reconciliarSaldo(String id) async {
+    emit(state.copyWith(status: ContasBancariasStatus.loading, clearMessages: true));
+    try {
+      await _repository.reconciliarSaldo(id);
+      await carregarContas();
+      emit(state.copyWith(
+        status: ContasBancariasStatus.success,
+        successMessage: 'Saldo reconciliado com sucesso com base no histórico de transações!',
+      ));
+      return true;
+    } catch (e) {
+      emit(state.copyWith(
+        status: ContasBancariasStatus.error,
+        errorMessage: 'Erro ao reconciliar saldo da conta bancária: $e',
+      ));
+      return false;
+    }
+  }
+
+  @override
+  Future<void> close() {
+    _streamSubscription?.cancel();
+    return super.close();
   }
 }

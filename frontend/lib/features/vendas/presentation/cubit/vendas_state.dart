@@ -19,6 +19,7 @@ class VendasState extends Equatable {
   final String statusPagamento; // 'EFETIVADO' ou 'PENDENTE'
   final String? dataPrevistaPagamento;
   final String? cartaoId;
+  final String? contaBancariaId;
   final int parcelas;
   final String? errorMessage;
   final String? vendaConcluidaId;
@@ -37,6 +38,7 @@ class VendasState extends Equatable {
     this.statusPagamento = 'EFETIVADO',
     this.dataPrevistaPagamento,
     this.cartaoId,
+    this.contaBancariaId,
     this.parcelas = 1,
     this.errorMessage,
     this.vendaConcluidaId,
@@ -96,6 +98,8 @@ class VendasState extends Equatable {
     String? dataPrevistaPagamento,
     bool clearDataPrevista = false,
     String? cartaoId,
+    String? contaBancariaId,
+    bool clearContaBancaria = false,
     int? parcelas,
     String? errorMessage,
     String? vendaConcluidaId,
@@ -114,6 +118,7 @@ class VendasState extends Equatable {
       statusPagamento: statusPagamento ?? this.statusPagamento,
       dataPrevistaPagamento: clearDataPrevista ? null : (dataPrevistaPagamento ?? this.dataPrevistaPagamento),
       cartaoId: cartaoId ?? this.cartaoId,
+      contaBancariaId: clearContaBancaria ? null : (contaBancariaId ?? this.contaBancariaId),
       parcelas: parcelas ?? this.parcelas,
       errorMessage: errorMessage,
       vendaConcluidaId: vendaConcluidaId,
@@ -135,6 +140,7 @@ class VendasState extends Equatable {
         statusPagamento,
         dataPrevistaPagamento,
         cartaoId,
+        contaBancariaId,
         parcelas,
         errorMessage,
         vendaConcluidaId,

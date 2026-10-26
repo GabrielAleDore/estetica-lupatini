@@ -18,9 +18,9 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO produtos (id, categoria_id, nome, codigo_barras, preco_custo, preco_venda, quantidade_estoque, estoque_minimo, permite_venda, unidade_medida) VALUES
     ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'Sérum Ácido Hialurônico 30ml', '789123456001', 45.00, 140.00, 18.000, 5.000, TRUE, 'UN'),
     ('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000003', 'Protetor Solar FPS 60 Toque Seco 50g', '789123456002', 32.00, 95.00, 24.000, 8.000, TRUE, 'UN'),
-    ('b0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000004', 'Toxina Botulínica 100U', '789123456003', 480.00, 0.00, 6.000, 4.000, FALSE, 'AMPOLA'),
+    ('b0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004', 'Toxina Botulínica 100U', '789123456003', 480.00, 0.00, 6.000, 4.000, FALSE, 'AMPOLA'),
     ('b0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000004', 'Preenchedor Ácido Hialurônico 1ml', '789123456004', 320.00, 0.00, 3.000, 5.000, FALSE, 'SERINGA'),
-    ('b0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000004', 'Kit Descartável (Luva, Máscara, Gaze)', '789123456005', 4.50, 0.00, 42.000, 20.000, FALSE, 'KIT')
+    ('b0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000004', 'Kit Descartável (Luva, Máscara, Gaze)', '789123456005', 4.50, 0.00, 42.000, 20.000, FALSE, 'KIT')
 ON CONFLICT (id) DO NOTHING;
 
 -- 3. Serviços Clínicos
@@ -31,10 +31,10 @@ INSERT INTO servicos (id, categoria_id, nome, duracao_minutos, preco, ativo) VAL
 ON CONFLICT (id) DO NOTHING;
 
 -- 4. Insumos por Serviço (Ficha Técnica de Consumo por Atendimento)
--- Botox consome 0.5 ampola de Toxina e 1 Kit Descartável
+-- Botox consome 0.5 ampola de Toxina (...0003) e 1 Kit Descartável (...0005)
 INSERT INTO servico_insumos (servico_id, produto_id, quantidade_consumo) VALUES
-    ('c0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000004', 0.500),
-    ('c0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000004', 1.000)
+    ('c0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000003', 0.500),
+    ('c0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000005', 1.000)
 ON CONFLICT DO NOTHING;
 
 -- 5. Contas e Cartões (Híbrido PF vs. PJ)

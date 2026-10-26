@@ -105,4 +105,15 @@ class AuthCubit extends Cubit<AuthState> {
       emit(state.copyWith(errorMessage: e.toString()));
     }
   }
+
+  Future<bool> excluirUsuario(String id) async {
+    try {
+      await _repository.excluirUsuario(id);
+      await carregarColaboradores();
+      return true;
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString().replaceAll('Exception: ', '')));
+      return false;
+    }
+  }
 }

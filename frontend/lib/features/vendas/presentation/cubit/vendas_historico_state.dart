@@ -23,14 +23,14 @@ class VendasHistoricoState extends Equatable {
 
   double get totalEfetivado {
     return vendas
-        .where((v) => v['status_pagamento'] == 'EFETIVADO' && v['status'] != 'CANCELADA')
-        .fold(0.0, (acc, v) => acc + ((v['valor_liquido'] as num?)?.toDouble() ?? 0.0));
+        .where((v) => (v['status_pagamento'] == 'EFETIVADO' || v['status'] == 'PAGO') && v['status'] != 'CANCELADA')
+        .fold(0.0, (acc, v) => acc + ((v['valor_liquido'] as num?)?.toDouble() ?? (v['valor_total'] as num?)?.toDouble() ?? 0.0));
   }
 
   double get totalPendente {
     return vendas
-        .where((v) => v['status_pagamento'] == 'PENDENTE' && v['status'] != 'CANCELADA')
-        .fold(0.0, (acc, v) => acc + ((v['valor_liquido'] as num?)?.toDouble() ?? 0.0));
+        .where((v) => (v['status_pagamento'] == 'PENDENTE' || v['status'] == 'PENDENTE') && v['status'] != 'CANCELADA')
+        .fold(0.0, (acc, v) => acc + ((v['valor_liquido'] as num?)?.toDouble() ?? (v['valor_total'] as num?)?.toDouble() ?? 0.0));
   }
 
   VendasHistoricoState copyWith({

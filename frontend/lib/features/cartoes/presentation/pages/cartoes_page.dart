@@ -6,6 +6,7 @@ import '../cubit/cartoes_cubit.dart';
 import '../cubit/cartoes_state.dart';
 import '../widgets/novo_cartao_dialog.dart';
 import '../widgets/nova_despesa_cartao_dialog.dart';
+import '../../../contas_pagar/presentation/widgets/editar_parcela_dialog.dart';
 
 class CartoesPage extends StatelessWidget {
   final CartoesCubit? cubit;
@@ -42,6 +43,18 @@ class _CartoesView extends StatelessWidget {
     );
   }
 
+  void _abrirModalEditarCartao(BuildContext context, Map<String, dynamic> cartao) {
+    final cubit = context.read<CartoesCubit>();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => NovoCartaoDialog(
+        cartaoParaEditar: cartao,
+        onSalvar: (dados) => cubit.atualizarCartao(cartao['id'], dados),
+      ),
+    );
+  }
+
   void _abrirModalNovaDespesa(BuildContext context, List<Map<String, dynamic>> cartoes, String? cartaoSelecionadoId) {
     final cubit = context.read<CartoesCubit>();
     showDialog(
@@ -73,7 +86,7 @@ class _CartoesView extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestão de Cartões, Dívidas & Faturas (PF vs. PJ)'),
+        title: const Text('Gestão de Cartões & Faturas'),
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: AppColors.textPrimaryLight,
@@ -100,67 +113,32 @@ class _CartoesView extends StatelessWidget {
         builder: (context, state) {
           final cubit = context.read<CartoesCubit>();
 
-          return Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top Action Bar: Filtro Escopo + Botões de Ação
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          return SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top Action Bar: Botões de Ação
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 12,
+                    runSpacing: 10,
                     children: [
-                      // Filtro de Escopo (Segmented/Chips)
-                      Row(
-                        children: [
-                          const Text('Regime:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          const SizedBox(width: 8),
-                          ChoiceChip(
-                            label: const Text('Todos'),
-                            selected: state.filtroEscopo == 'TODOS',
-                            onSelected: (_) => cubit.carregarCartoes(escopo: 'TODOS'),
-                          ),
-                          const SizedBox(width: 8),
-                          ChoiceChip(
-                            label: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.business, size: 14, color: AppColors.pjClinical),
-                                SizedBox(width: 4),
-                                Text('Clínica (PJ)'),
-                              ],
-                            ),
-                            selected: state.filtroEscopo == 'PJ',
-                            selectedColor: AppColors.pjClinical.withValues(alpha: 0.2),
-                            onSelected: (_) => cubit.carregarCartoes(escopo: 'PJ'),
-                          ),
-                          const SizedBox(width: 8),
-                          ChoiceChip(
-                            label: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.person, size: 14, color: AppColors.pfPersonal),
-                                SizedBox(width: 4),
-                                Text('Sócios (PF)'),
-                              ],
-                            ),
-                            selected: state.filtroEscopo == 'PF',
-                            selectedColor: AppColors.pfPersonal.withValues(alpha: 0.2),
-                            onSelected: (_) => cubit.carregarCartoes(escopo: 'PF'),
-                          ),
-                        ],
+                      Text(
+                        'Cartões Cadastrados (${state.cartoes.length})',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
-                      const SizedBox(width: 24),
-                      // Botões de Ação
-                      Row(
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
                         children: [
                           OutlinedButton.icon(
                             onPressed: () => _abrirModalNovoCartao(context),
                             icon: const Icon(Icons.add_circle_outline, size: 18),
                             label: const Text('NOVO CARTÃO'),
                           ),
-                          const SizedBox(width: 12),
                           ElevatedButton.icon(
                             onPressed: state.cartoes.isEmpty
                                 ? null
@@ -170,9 +148,9 @@ class _CartoesView extends StatelessWidget {
                                       state.cartaoSelecionado?['id'],
                                     ),
                             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                            icon: const Icon(Icons.add_card, color: Colors.white, size: 18),
+                            icon: const Icon(Icons.receipt_long, color: Colors.white, size: 18),
                             label: const Text(
-                              'LANÇAR COMPRA NO CARTÃO',
+                              'REGISTRAR DESPESA NO CARTÃO',
                               style: TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -180,8 +158,30 @@ class _CartoesView extends StatelessWidget {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 16),
+
+                // Banner Informativo: Controle Integrado pelo Registro de Despesas
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, color: AppColors.primary, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Controle Integrado: Todas as compras parceladas no cartão são geridas no Registro de Despesas (Contas a Pagar) e distribuídas automaticamente nos próximos meses.',
+                          style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
                 // Lista de Cartões (Carrossel / Horizontal)
                 if (state.cartoes.isEmpty)
@@ -211,15 +211,13 @@ class _CartoesView extends StatelessWidget {
                   )
                 else ...[
                   SizedBox(
-                    height: 115,
+                    height: 135,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       itemCount: state.cartoes.length,
                       itemBuilder: (context, index) {
                         final c = state.cartoes[index];
                         final isSelected = state.cartaoSelecionado?['id'] == c['id'];
-                        final isPj = c['escopo'] == 'PJ';
-
                         return GestureDetector(
                           onTap: () => cubit.selecionarCartao(c),
                           child: Container(
@@ -228,7 +226,7 @@ class _CartoesView extends StatelessWidget {
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? (isPj ? AppColors.pjClinical : AppColors.primaryDark)
+                                  ? AppColors.primary
                                   : Colors.white,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
@@ -252,24 +250,41 @@ class _CartoesView extends StatelessWidget {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Icon(
-                                      Icons.credit_card,
-                                      color: isSelected ? Colors.white : (isPj ? AppColors.pjClinical : AppColors.pfPersonal),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.credit_card,
+                                          color: isSelected ? Colors.white : AppColors.primary,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.edit_outlined,
+                                            size: 16,
+                                            color: isSelected ? Colors.white70 : AppColors.primary,
+                                          ),
+                                          tooltip: 'Editar Cartão',
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          onPressed: () => _abrirModalEditarCartao(context, c),
+                                        ),
+                                      ],
                                     ),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: isSelected
                                             ? Colors.white.withValues(alpha: 0.2)
-                                            : (isPj ? AppColors.pjClinical.withValues(alpha: 0.1) : AppColors.pfPersonal.withValues(alpha: 0.1)),
+                                            : AppColors.primary.withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
-                                        isPj ? 'CLÍNICA PJ' : 'SÓCIOS PF',
+                                        'VENCE DIA ${c['dia_vencimento']}',
                                         style: TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
-                                          color: isSelected ? Colors.white : (isPj ? AppColors.pjClinical : AppColors.pfPersonal),
+                                          color: isSelected ? Colors.white : AppColors.primary,
                                         ),
                                       ),
                                     ),
@@ -368,20 +383,19 @@ class _CartoesView extends StatelessWidget {
                     const SizedBox(height: 12),
 
                     // Detalhe da Fatura
-                    Expanded(
-                      child: state.faturaDetalhada == null
-                          ? const Center(child: Text('Nenhuma informação de fatura para este mês.'))
-                          : _FaturaDetalhesView(
-                              fatura: state.faturaDetalhada!,
-                              currencyFormat: currencyFormat,
-                            ),
-                    ),
+                    state.faturaDetalhada == null
+                        ? const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text('Nenhuma informação de fatura para este mês.')))
+                        : _FaturaDetalhesView(
+                            fatura: state.faturaDetalhada!,
+                            currencyFormat: currencyFormat,
+                          ),
                   ],
                 ],
               ],
             ),
-          );
-        },
+          ),
+        );
+      },
       ),
     );
   }
@@ -395,6 +409,33 @@ class _FaturaDetalhesView extends StatelessWidget {
     required this.fatura,
     required this.currencyFormat,
   });
+
+  void _abrirModalEditarParcela(BuildContext context, Map<String, dynamic> parcela) {
+    final cubit = context.read<CartoesCubit>();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => EditarParcelaDialog(
+        parcela: parcela,
+        onSalvar: ({
+          required String transacaoId,
+          required String novaDataVencimentoStr,
+          double? novoValor,
+          String? novaDescricao,
+          String? novaCategoriaId,
+          required bool aplicarEmTodasSeguintes,
+        }) =>
+            cubit.atualizarParcelaDespesa(
+          transacaoId: transacaoId,
+          novaDataVencimentoStr: novaDataVencimentoStr,
+          novoValor: novoValor,
+          novaDescricao: novaDescricao,
+          novaCategoriaId: novaCategoriaId,
+          aplicarEmTodasSeguintes: aplicarEmTodasSeguintes,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -484,41 +525,55 @@ class _FaturaDetalhesView extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          Expanded(
-            child: parcelas.isEmpty
-                ? const Center(
+          parcelas.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
                     child: Text(
                       'Nenhum lançamento ou parcela com vencimento nesta fatura.',
                       style: TextStyle(color: AppColors.textSecondaryLight),
                     ),
-                  )
-                : ListView.separated(
-                    itemCount: parcelas.length,
-                    separatorBuilder: (_, __) => const Divider(height: 12),
-                    itemBuilder: (context, index) {
-                      final p = parcelas[index];
-                      final valor = double.tryParse(p['valor_parcela']?.toString() ?? '0') ?? 0.0;
-                      final numParcela = p['numero_parcela'];
-
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: CircleAvatar(
-                          backgroundColor: AppColors.primaryLight.withValues(alpha: 0.3),
-                          child: Text(
-                            '#$numParcela',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primaryDark),
-                          ),
-                        ),
-                        title: Text('Parcela $numParcela - Vencimento ${p['data_vencimento']}'),
-                        subtitle: Text('Status: ${p['status']}  •  Fatura Ref: ${p['mes_fatura_referencia']}'),
-                        trailing: Text(
-                          currencyFormat.format(valor),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                      );
-                    },
                   ),
-          ),
+                )
+              : ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: parcelas.length,
+                  separatorBuilder: (_, __) => const Divider(height: 12),
+                  itemBuilder: (context, index) {
+                    final p = parcelas[index];
+                    final valor = double.tryParse(p['valor_parcela']?.toString() ?? '0') ?? 0.0;
+                    final numParcela = p['numero_parcela'];
+
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: AppColors.primaryLight.withValues(alpha: 0.3),
+                        child: Text(
+                          '#$numParcela',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primaryDark),
+                        ),
+                      ),
+                      title: Text('${p['descricao']} - Vencimento ${p['data_vencimento']}'),
+                      subtitle: Text('Status: ${p['status']}  •  Fatura Ref: ${p['mes_fatura_referencia']}'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            currencyFormat.format(valor),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.edit_calendar_outlined, size: 20, color: AppColors.primary),
+                            tooltip: 'Editar Parcela / Vencimento',
+                            onPressed: () => _abrirModalEditarParcela(context, p),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
         ],
       ),
     );

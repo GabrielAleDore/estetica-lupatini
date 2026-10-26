@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/utils/moeda_input_formatter.dart';
 import '../../domain/models/conta_bancaria_model.dart';
 
 class ContaBancariaDialog extends StatefulWidget {
@@ -24,6 +25,7 @@ class _ContaBancariaDialogState extends State<ContaBancariaDialog> {
   late TextEditingController _numeroContaController;
   late TextEditingController _chavePixController;
   late TextEditingController _saldoInicialController;
+  late TextEditingController _saldoAtualController;
 
   late String _bancoSelecionado;
   late String _escopoSelecionado; // 'PJ' ou 'PF'
@@ -69,8 +71,15 @@ class _ContaBancariaDialogState extends State<ContaBancariaDialog> {
     _agenciaController = TextEditingController(text: c?.agencia ?? '');
     _numeroContaController = TextEditingController(text: c?.numeroConta ?? '');
     _chavePixController = TextEditingController(text: c?.chavePix ?? '');
+
+    final sInicial = c?.saldoInicial ?? 0.0;
+    final sAtual = c != null ? ((c.saldoAtual == 0.0 && c.saldoInicial > 0.0) ? c.saldoInicial : c.saldoAtual) : 0.0;
+
     _saldoInicialController = TextEditingController(
-      text: c != null ? c.saldoInicial.toStringAsFixed(2).replaceAll('.', ',') : '0,00',
+      text: sInicial > 0 ? MoedaInputFormatter.formatar(sInicial) : (c != null ? '0,00' : ''),
+    );
+    _saldoAtualController = TextEditingController(
+      text: sAtual > 0 ? MoedaInputFormatter.formatar(sAtual) : (c != null ? '0,00' : ''),
     );
 
     _bancoSelecionado = c != null && _bancosDisponiveis.contains(c.bancoNome)
@@ -90,6 +99,7 @@ class _ContaBancariaDialogState extends State<ContaBancariaDialog> {
     _numeroContaController.dispose();
     _chavePixController.dispose();
     _saldoInicialController.dispose();
+    _saldoAtualController.dispose();
     super.dispose();
   }
 
@@ -102,13 +112,37 @@ class _ContaBancariaDialogState extends State<ContaBancariaDialog> {
     }
   }
 
+  double _parseMonetario(String text) {
+    return MoedaInputFormatter.parse(text);
+  }
+
   Future<void> _submeter() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSalvando = true);
 
-    final saldoLimpo = _saldoInicialController.text.trim().replaceAll('.', '').replaceAll(',', '.');
-    final saldoInicial = double.tryParse(saldoLimpo) ?? 0.0;
+    final saldoInicial = _parseMonetario(_saldoInicialController.text);
+    double saldoAtualFinal;
+
+    if (widget.contaExistente == null) {
+      saldoAtualFinal = saldoInicial;
+    } else {
+      final saldoAtualDigitado = _parseMonetario(_saldoAtualController.text);
+      final antigoSaldoInicial = widget.contaExistente!.saldoInicial;
+      final antigoSaldoAtual = widget.contaExistente!.saldoAtual;
+
+      if (saldoAtualDigitado != antigoSaldoAtual) {
+        saldoAtualFinal = saldoAtualDigitado;
+      } else if (saldoInicial != antigoSaldoInicial) {
+        if (antigoSaldoAtual == 0.0 || antigoSaldoAtual == antigoSaldoInicial) {
+          saldoAtualFinal = saldoInicial;
+        } else {
+          saldoAtualFinal = antigoSaldoAtual + (saldoInicial - antigoSaldoInicial);
+        }
+      } else {
+        saldoAtualFinal = (antigoSaldoAtual == 0.0 && saldoInicial > 0.0) ? saldoInicial : antigoSaldoAtual;
+      }
+    }
 
     final conta = ContaBancariaModel(
       id: widget.contaExistente?.id ?? '',
@@ -120,7 +154,7 @@ class _ContaBancariaDialogState extends State<ContaBancariaDialog> {
       escopo: _escopoSelecionado,
       chavePix: _chavePixController.text.trim().isEmpty ? null : _chavePixController.text.trim(),
       saldoInicial: saldoInicial,
-      saldoAtual: widget.contaExistente != null ? widget.contaExistente!.saldoAtual : saldoInicial,
+      saldoAtual: saldoAtualFinal,
       corIdentificadora: _corSelecionada,
       ativo: _ativo,
     );
@@ -196,98 +230,12 @@ class _ContaBancariaDialogState extends State<ContaBancariaDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Seletor de Escopo (PJ vs PF)
-                        const Text(
-                          'Escopo da Conta *',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimaryLight),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: InkWell(
-                                onTap: () => setState(() => _escopoSelecionado = 'PJ'),
-                                borderRadius: BorderRadius.circular(10),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                                  decoration: BoxDecoration(
-                                    color: _escopoSelecionado == 'PJ'
-                                        ? AppColors.primary.withValues(alpha: 0.12)
-                                        : Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: _escopoSelecionado == 'PJ' ? AppColors.primary : Colors.grey.shade300,
-                                      width: _escopoSelecionado == 'PJ' ? 2 : 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.business,
-                                        size: 20,
-                                        color: _escopoSelecionado == 'PJ' ? AppColors.primary : Colors.grey,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'PJ - Clínica',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: _escopoSelecionado == 'PJ' ? AppColors.primary : Colors.grey.shade700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: InkWell(
-                                onTap: () => setState(() => _escopoSelecionado = 'PF'),
-                                borderRadius: BorderRadius.circular(10),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                                  decoration: BoxDecoration(
-                                    color: _escopoSelecionado == 'PF'
-                                        ? const Color(0xFF6D4C41).withValues(alpha: 0.12)
-                                        : Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: _escopoSelecionado == 'PF' ? const Color(0xFF6D4C41) : Colors.grey.shade300,
-                                      width: _escopoSelecionado == 'PF' ? 2 : 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.person,
-                                        size: 20,
-                                        color: _escopoSelecionado == 'PF' ? const Color(0xFF6D4C41) : Colors.grey,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'PF - Pessoal / Sócia',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: _escopoSelecionado == 'PF' ? const Color(0xFF6D4C41) : Colors.grey.shade700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
                         // Nome Identificador
                         TextFormField(
                           controller: _nomeContaController,
                           decoration: const InputDecoration(
                             labelText: 'Nome Identificador da Conta *',
-                            hintText: 'Ex: Nubank PJ Clínica, Itaú Operacional, Inter PF Mariana',
+                            hintText: 'Ex: Nubank Principal, Itaú Operacional, Caixa Espécie',
                             prefixIcon: Icon(Icons.label_outline),
                             border: OutlineInputBorder(),
                           ),
@@ -378,7 +326,7 @@ class _ContaBancariaDialogState extends State<ContaBancariaDialog> {
                         ),
                         const SizedBox(height: 14),
 
-                        // Chave PIX e Saldo Inicial
+                        // Chave PIX e Saldo Inicial / Atual
                         Row(
                           children: [
                             Expanded(
@@ -398,19 +346,46 @@ class _ContaBancariaDialogState extends State<ContaBancariaDialog> {
                               flex: 2,
                               child: TextFormField(
                                 controller: _saldoInicialController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                decoration: InputDecoration(
-                                  labelText: isEdicao ? 'Saldo Inicial R\$' : 'Saldo Inicial R\$ *',
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  MoedaInputFormatter(),
+                                ],
+                                decoration: const InputDecoration(
+                                  labelText: 'Saldo Inicial R\$',
                                   hintText: '0,00',
                                   prefixText: 'R\$ ',
-                                  border: const OutlineInputBorder(),
+                                  border: OutlineInputBorder(),
                                 ),
-                                validator: (v) {
-                                  if (v == null || v.trim().isEmpty) return 'Informe o saldo inicial.';
-                                  return null;
+                                onChanged: (val) {
+                                  if (isEdicao && _parseMonetario(_saldoAtualController.text) == 0.0) {
+                                    _saldoAtualController.text = val;
+                                  }
                                 },
                               ),
                             ),
+                            if (isEdicao) ...[
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 2,
+                                child: TextFormField(
+                                  controller: _saldoAtualController,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    MoedaInputFormatter(),
+                                  ],
+                                  decoration: const InputDecoration(
+                                    labelText: 'Saldo Atual R\$ *',
+                                    hintText: '0,00',
+                                    prefixText: 'R\$ ',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  validator: (v) {
+                                    if (v == null || v.trim().isEmpty) return 'Informe o saldo atual.';
+                                    return null;
+                                  },
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 16),
