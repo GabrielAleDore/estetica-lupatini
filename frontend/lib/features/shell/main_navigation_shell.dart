@@ -69,7 +69,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       final destinos = _obterDestinosFiltrados(context.read<AuthCubit>().state.usuario?.role ?? '');
       String query = target.toLowerCase();
       if (query.contains('vendas')) query = 'receitas';
-      if (query.contains('pagar')) query = 'despesas';
+      if (query.contains('pagar') || query.contains('despesas') || query.contains('tesouraria')) query = 'contas a pagar';
       if (query.contains('estoque')) query = 'movimentação de estoque';
       if (query.contains('cockpit') || query.contains('operaç') || query.contains('inicio') || query.contains('início')) query = 'início';
       final idx = destinos.indexWhere((d) => d.label.toLowerCase().contains(query));
@@ -118,7 +118,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       rolesPermitidas: ['ADMIN', 'RECEPCAO'],
     ),
     _NavDestinationItem(
-      label: 'Registro de Despesas',
+      label: 'Contas a Pagar & Tesouraria',
       icon: Icons.account_balance_wallet_outlined,
       selectedIcon: Icons.account_balance_wallet,
       page: ContasPagarPage(),

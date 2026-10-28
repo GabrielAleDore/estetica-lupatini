@@ -13,6 +13,7 @@ import '../cubit/agenda_state.dart';
 import '../widgets/novo_agendamento_dialog.dart';
 import '../widgets/relatorios_agendamento_tab.dart';
 import '../widgets/whatsapp_template_dialog.dart';
+import '../../../pacotes/presentation/widgets/gerenciar_pacotes_cliente_dialog.dart';
 
 class AgendaPage extends StatefulWidget {
   final AgendaCubit? cubit;
@@ -70,6 +71,18 @@ class _AgendaView extends StatelessWidget {
           dataHoraFim: dataHoraFim,
           observacoes: observacoes,
         ),
+      ),
+    );
+  }
+
+  void _abrirPacotesDoAgendamento(BuildContext context, Agendamento agendamento, AgendaState state) {
+    showDialog(
+      context: context,
+      builder: (_) => GerenciarPacotesClienteDialog(
+        clienteId: agendamento.clienteId,
+        clienteNome: agendamento.clienteNome,
+        servicos: state.servicos,
+        agendamentoId: agendamento.id,
       ),
     );
   }
@@ -642,19 +655,36 @@ class _AgendaView extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
 
-                // Botão de Ação Rápida para Checkout: Transformar em Venda no PDV
-                if (agendamento.status == 'CONCLUIDO' || agendamento.status == 'CONFIRMADO')
-                  ElevatedButton.icon(
-                    onPressed: () => _iniciarCheckoutNoPdv(context, agendamento),
-                    icon: const Icon(Icons.point_of_sale, size: 16),
-                    label: const Text('COBRAR NO PDV', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: agendamento.status == 'CONCLUIDO' ? const Color(0xFF1B5E20) : AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                // Ações Rápidas: Consumir Sessão de Pacote ou Faturar no PDV
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => _abrirPacotesDoAgendamento(context, agendamento, cubit.state),
+                      icon: const Icon(Icons.collections_bookmark_outlined, size: 14),
+                      label: const Text('PACOTES / SESSÃO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primaryDark,
+                        side: const BorderSide(color: AppColors.primary),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
                     ),
-                  ),
+                    if (agendamento.status == 'CONCLUIDO' || agendamento.status == 'CONFIRMADO')
+                      ElevatedButton.icon(
+                        onPressed: () => _iniciarCheckoutNoPdv(context, agendamento),
+                        icon: const Icon(Icons.point_of_sale, size: 14),
+                        label: const Text('COBRAR NO PDV', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: agendamento.status == 'CONCLUIDO' ? const Color(0xFF1B5E20) : AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
           ],

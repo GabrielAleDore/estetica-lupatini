@@ -212,9 +212,9 @@ class _CockpitViewState extends State<_CockpitView> {
                           SaudeFinanceiraDiaGrid(
                             saude: data?.saudeFinanceira ?? const SaudeFinanceiraDia(),
                             onVerReceberHoje: () => MainNavigationShell.navegarPara('Registro de Receitas'),
-                            onVerPagarHoje: () => MainNavigationShell.navegarPara('Registro de Despesas'),
+                            onVerPagarHoje: () => MainNavigationShell.navegarPara('Contas a Pagar & Tesouraria'),
                             onVerRecebimentosVencidos: () => MainNavigationShell.navegarPara('Registro de Receitas'),
-                            onVerPagamentosVencidos: () => MainNavigationShell.navegarPara('Registro de Despesas'),
+                            onVerPagamentosVencidos: () => MainNavigationShell.navegarPara('Contas a Pagar & Tesouraria'),
                           ),
                           const SizedBox(height: 20),
                           ResumoPeriodoTable(

@@ -5,6 +5,8 @@ import '../../../../core/constants/app_colors.dart';
 import '../cubit/clientes_cubit.dart';
 import '../cubit/clientes_state.dart';
 import '../widgets/novo_cliente_dialog.dart';
+import '../../../catalogo/data/catalogo_repository.dart';
+import '../../../pacotes/presentation/widgets/gerenciar_pacotes_cliente_dialog.dart';
 
 class ClientesPage extends StatelessWidget {
   final ClientesCubit? cubit;
@@ -62,6 +64,23 @@ class _ClientesViewState extends State<_ClientesView> with SingleTickerProviderS
         getLastError: () => cubit.state.errorMessage,
       ),
     );
+  }
+
+  void _abrirModalPacotes(BuildContext context, Map<String, dynamic> cliente) async {
+    final clienteId = cliente['id'].toString();
+    final nome = cliente['nome']?.toString() ?? 'Paciente';
+    final servicos = await CatalogoRepository().listarServicos();
+
+    if (context.mounted) {
+      showDialog(
+        context: context,
+        builder: (_) => GerenciarPacotesClienteDialog(
+          clienteId: clienteId,
+          clienteNome: nome,
+          servicos: servicos,
+        ),
+      );
+    }
   }
 
   void _abrirModalConfigurarFidelidade(BuildContext context, Map<String, dynamic> cliente) {
@@ -370,13 +389,23 @@ class _ClientesViewState extends State<_ClientesView> with SingleTickerProviderS
                                           'Tel: ${cli['telefone'] ?? 'N/A'}  •  CPF: ${cli['cpf'] ?? 'N/A'}  •  Gasto: ${_currencyFormat.format(totalGasto)}',
                                           style: const TextStyle(color: AppColors.textSecondaryLight, fontSize: 12),
                                         ),
-                                        trailing: IconButton(
-                                          icon: Icon(
-                                            isVip ? Icons.stars : Icons.star_border,
-                                            color: isVip ? Colors.amber.shade700 : Colors.grey,
-                                          ),
-                                          tooltip: isVip ? 'Configurar Fidelidade VIP' : 'Tornar Cliente VIP',
-                                          onPressed: () => _abrirModalConfigurarFidelidade(context, cli),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.collections_bookmark_outlined, color: AppColors.primary),
+                                              tooltip: 'Carteira de Pacotes & Sessões',
+                                              onPressed: () => _abrirModalPacotes(context, cli),
+                                            ),
+                                            IconButton(
+                                              icon: Icon(
+                                                isVip ? Icons.stars : Icons.star_border,
+                                                color: isVip ? Colors.amber.shade700 : Colors.grey,
+                                              ),
+                                              tooltip: isVip ? 'Configurar Fidelidade VIP' : 'Tornar Cliente VIP',
+                                              onPressed: () => _abrirModalConfigurarFidelidade(context, cli),
+                                            ),
+                                          ],
                                         ),
                                         children: [
                                           Container(
@@ -393,19 +422,36 @@ class _ClientesViewState extends State<_ClientesView> with SingleTickerProviderS
                                                       'Ficha de Anamnese Dermatológica:',
                                                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryDark),
                                                     ),
-                                                    ElevatedButton.icon(
-                                                      onPressed: () => _abrirModalConfigurarFidelidade(context, cli),
-                                                      style: ElevatedButton.styleFrom(
-                                                        backgroundColor: isVip ? Colors.amber.shade700 : AppColors.primary,
-                                                        foregroundColor: Colors.white,
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                        minimumSize: const Size(0, 32),
-                                                      ),
-                                                      icon: const Icon(Icons.stars, size: 14),
-                                                      label: Text(
-                                                        isVip ? 'Gerenciar VIP (${descVip.toStringAsFixed(0)}%)' : 'Habilitar Fidelidade VIP',
-                                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                                                      ),
+                                                    Wrap(
+                                                      spacing: 8,
+                                                      runSpacing: 6,
+                                                      children: [
+                                                        OutlinedButton.icon(
+                                                          onPressed: () => _abrirModalPacotes(context, cli),
+                                                          style: OutlinedButton.styleFrom(
+                                                            foregroundColor: AppColors.primaryDark,
+                                                            side: const BorderSide(color: AppColors.primary),
+                                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                            minimumSize: const Size(0, 32),
+                                                          ),
+                                                          icon: const Icon(Icons.collections_bookmark_outlined, size: 14),
+                                                          label: const Text('Pacotes & Sessões', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                                        ),
+                                                        ElevatedButton.icon(
+                                                          onPressed: () => _abrirModalConfigurarFidelidade(context, cli),
+                                                          style: ElevatedButton.styleFrom(
+                                                            backgroundColor: isVip ? Colors.amber.shade700 : AppColors.primary,
+                                                            foregroundColor: Colors.white,
+                                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                            minimumSize: const Size(0, 32),
+                                                          ),
+                                                          icon: const Icon(Icons.stars, size: 14),
+                                                          label: Text(
+                                                            isVip ? 'Gerenciar VIP (${descVip.toStringAsFixed(0)}%)' : 'Habilitar Fidelidade VIP',
+                                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
                                                   ],
                                                 ),
@@ -603,24 +649,40 @@ class _ClientesViewState extends State<_ClientesView> with SingleTickerProviderS
                                             ],
                                           ),
                                         ),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            ElevatedButton.icon(
-                                              onPressed: () => _abrirModalConfigurarFidelidade(context, cli),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.amber.shade700,
-                                                foregroundColor: Colors.white,
-                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            OutlinedButton.icon(
+                                              onPressed: () => _abrirModalPacotes(context, cli),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: AppColors.primaryDark,
+                                                side: const BorderSide(color: AppColors.primary),
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                               ),
-                                              icon: const Icon(Icons.tune, size: 14),
-                                              label: const Text('Ajustar %', style: TextStyle(fontSize: 12)),
+                                              icon: const Icon(Icons.collections_bookmark_outlined, size: 14),
+                                              label: const Text('Pacotes', style: TextStyle(fontSize: 12)),
                                             ),
-                                            const SizedBox(height: 6),
-                                            TextButton.icon(
-                                              onPressed: () => cubit.atualizarFidelidade(clienteId, false, 0.0),
-                                              icon: const Icon(Icons.star_border, size: 14, color: AppColors.error),
-                                              label: const Text('Remover VIP', style: TextStyle(fontSize: 11, color: AppColors.error)),
+                                            const SizedBox(width: 8),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
+                                                ElevatedButton.icon(
+                                                  onPressed: () => _abrirModalConfigurarFidelidade(context, cli),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.amber.shade700,
+                                                    foregroundColor: Colors.white,
+                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                  ),
+                                                  icon: const Icon(Icons.tune, size: 14),
+                                                  label: const Text('Ajustar %', style: TextStyle(fontSize: 12)),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                TextButton.icon(
+                                                  onPressed: () => cubit.atualizarFidelidade(clienteId, false, 0.0),
+                                                  icon: const Icon(Icons.star_border, size: 14, color: AppColors.error),
+                                                  label: const Text('Remover VIP', style: TextStyle(fontSize: 11, color: AppColors.error)),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                         ),

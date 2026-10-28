@@ -30,6 +30,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:estetica_lupatini/features/contas_pagar/data/contas_pagar_repository.dart';
 import 'package:estetica_lupatini/features/contas_pagar/presentation/cubit/contas_pagar_cubit.dart';
 import 'package:estetica_lupatini/features/contas_pagar/presentation/pages/contas_pagar_page.dart';
+import 'package:estetica_lupatini/features/contas_pagar/presentation/widgets/liquidar_despesa_dialog.dart';
 import 'package:estetica_lupatini/features/agenda/data/agenda_repository.dart';
 import 'package:estetica_lupatini/features/agenda/domain/models/agendamento.dart';
 import 'package:estetica_lupatini/features/agenda/presentation/cubit/agenda_cubit.dart';
@@ -43,6 +44,65 @@ import 'package:estetica_lupatini/features/operacoes/data/operacoes_repository.d
 import 'package:estetica_lupatini/features/operacoes/domain/models/cockpit_data.dart';
 import 'package:estetica_lupatini/features/operacoes/presentation/cubit/operacoes_cubit.dart';
 import 'package:estetica_lupatini/features/operacoes/presentation/pages/cockpit_operacoes_page.dart';
+import 'package:estetica_lupatini/features/pacotes/data/pacotes_repository.dart';
+import 'package:estetica_lupatini/features/pacotes/domain/models/cliente_pacote_model.dart';
+import 'package:estetica_lupatini/features/pacotes/presentation/cubit/pacotes_cubit.dart';
+import 'package:estetica_lupatini/features/pacotes/presentation/widgets/gerenciar_pacotes_cliente_dialog.dart';
+
+
+class FakePacotesRepository implements PacotesRepository {
+  @override
+  Future<List<ClientePacoteModel>> carregarPacotesCliente(String clienteId) async {
+    return [
+      ClientePacoteModel(
+        id: 'pac-1',
+        clienteId: clienteId,
+        servicoId: 'serv-1',
+        servicoNome: 'Drenagem Linfática',
+        quantidadeTotal: 10,
+        quantidadeConsumida: 3,
+        quantidadeRestante: 7,
+        valorTotal: 1200.0,
+        valorPorSessao: 120.0,
+        dataAquisicao: DateTime(2026, 10, 1),
+        status: 'ATIVO',
+      ),
+    ];
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> carregarProfissionais() async {
+    return [
+      {'id': 'prof-1', 'nome': 'Dra. Amanda Lupatini', 'role': 'BIOMEDICA'},
+    ];
+  }
+
+  @override
+  Future<Map<String, dynamic>> contratarPacote({
+    required String clienteId,
+    required String servicoId,
+    required int quantidadeTotal,
+    required double valorTotal,
+    String? vendaOrigemId,
+    String? tituloPersonalizado,
+    int? validadeMeses,
+    String? observacoes,
+  }) async {
+    return {'success': true};
+  }
+
+  @override
+  Future<Map<String, dynamic>> darBaixaSessao({
+    required String pacoteId,
+    String? profissionalId,
+    String? agendamentoId,
+    String? observacoesEvolucao,
+    Map<String, dynamic>? parametrosUtilizados,
+    List<String>? fotosUrls,
+  }) async {
+    return {'success': true, 'mensagem': 'Sessão registrada com sucesso!'};
+  }
+}
 
 class FakeOperacoesRepository implements OperacoesRepository {
   @override
@@ -451,6 +511,7 @@ class FakeContasPagarRepository implements ContasPagarRepository {
       'id': 'cp-001',
       'descricao': 'Aluguel do Consultório',
       'valor': 2500.0,
+      'valor_total': 2500.0,
       'data_vencimento': '2026-09-20',
       'status': 'PENDENTE',
       'escopo': 'PJ',
@@ -484,7 +545,14 @@ class FakeContasPagarRepository implements ContasPagarRepository {
   }) async {}
 
   @override
-  Future<void> marcarComoPago(String transacaoId, {String? contaBancariaId}) async {}
+  Future<void> marcarComoPago(
+    String transacaoId, {
+    String? contaBancariaId,
+    DateTime? dataPagamento,
+    double? valorFinal,
+    String? comprovante,
+    String? observacoes,
+  }) async {}
 
   @override
   Future<void> excluirContaPagar(String transacaoId) async {}
@@ -674,10 +742,85 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Registro de Despesas'), findsOneWidget);
-    expect(find.text('Nova Despesa'), findsOneWidget);
+    expect(find.text('Contas a Pagar & Obrigações'), findsOneWidget);
+    expect(find.text('Nova Obrigação'), findsOneWidget);
     expect(find.text('Aluguel do Consultório'), findsOneWidget);
-    expect(find.text('Pagar'), findsOneWidget);
+    expect(find.text('Liquidar'), findsOneWidget);
+  });
+
+  testWidgets('LiquidarDespesaDialog allows selecting retroactive date and displays balance warning', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    DateTime? capturedDataPagamento;
+    String? capturedContaId;
+
+    final despesa = {
+      'id': 'cp-999',
+      'descricao': 'Fornecedor de Toxina Botulínica',
+      'valor_total': 1800.0,
+      'data_vencimento': '2026-10-15',
+      'categoria': {'nome': 'Insumos'},
+    };
+
+    final contasBancarias = [
+      const ContaBancariaModel(
+        id: 'cb-1',
+        nomeConta: 'Conta Corrente Principal',
+        bancoNome: 'Banco Itaú',
+        saldoAtual: 15000.0,
+        tipoConta: 'CORRENTE',
+        ativo: true,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LiquidarDespesaDialog(
+            despesa: despesa,
+            contasBancarias: contasBancarias,
+            onConfirmar: ({
+              required String transacaoId,
+              String? contaBancariaId,
+              required DateTime dataPagamento,
+              double? valorFinal,
+              String? comprovante,
+              String? observacoes,
+            }) async {
+              capturedDataPagamento = dataPagamento;
+              capturedContaId = contaBancariaId;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Liquidação Financeira de Título'), findsOneWidget);
+    expect(find.text('Fornecedor de Toxina Botulínica'), findsOneWidget);
+    expect(find.text('Hoje'), findsOneWidget);
+    expect(find.text('Ontem'), findsOneWidget);
+    expect(find.textContaining('No Vencimento'), findsOneWidget);
+
+    // Clicar em "Ontem" para marcar retroativo
+    await tester.tap(find.text('Ontem'));
+    await tester.pump();
+
+    // Deve exibir o aviso de pagamento retroativo
+    expect(find.textContaining('Baixa retroativa:'), findsOneWidget);
+
+    // Confirmar a liquidação
+    final btnConfirmar = find.text('Confirmar Liquidação');
+    await tester.ensureVisible(btnConfirmar);
+    await tester.tap(btnConfirmar);
+    await tester.pump();
+
+    expect(capturedDataPagamento, isNotNull);
+    final ontem = DateTime.now().subtract(const Duration(days: 1));
+    expect(capturedDataPagamento!.day, ontem.day);
+    expect(capturedContaId, 'cb-1');
   });
 
   testWidgets('MultiBlocProvider provides ContasPagarCubit and VendasHistoricoCubit without ProviderNotFoundError', (WidgetTester tester) async {
@@ -965,5 +1108,39 @@ void main() {
     expect(find.text('Aniversariantes da Semana'), findsOneWidget);
     expect(find.text('Camila Ferreira'), findsOneWidget);
   });
+
+  testWidgets('GerenciarPacotesClienteDialog displays packages, progress and action buttons', (WidgetTester tester) async {
+    final fakeRepo = FakePacotesRepository();
+    final cubit = PacotesCubit(repository: fakeRepo);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        supportedLocales: const [Locale('pt', 'BR')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: Scaffold(
+          body: GerenciarPacotesClienteDialog(
+            clienteId: 'cli-1',
+            clienteNome: 'Mariana Silveira',
+            servicos: const [
+              {'id': 'serv-1', 'nome': 'Drenagem Linfática', 'preco': 150.0},
+            ],
+            cubit: cubit..carregarPacotes('cli-1'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Carteira de Pacotes & Tratamentos'), findsOneWidget);
+    expect(find.text('Contratar Pacote'), findsOneWidget);
+    expect(find.text('10 sessões de Drenagem Linfática'), findsOneWidget);
+    expect(find.text('3/10 sessões'), findsOneWidget);
+    expect(find.text('Realizar Sessão'), findsOneWidget);
+  });
 }
+
 

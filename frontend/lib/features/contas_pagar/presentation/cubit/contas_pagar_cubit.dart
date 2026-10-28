@@ -84,10 +84,24 @@ class ContasPagarCubit extends Cubit<ContasPagarState> {
     }
   }
 
-  Future<bool> marcarComoPago(String transacaoId, {String? contaBancariaId}) async {
+  Future<bool> marcarComoPago(
+    String transacaoId, {
+    String? contaBancariaId,
+    DateTime? dataPagamento,
+    double? valorFinal,
+    String? comprovante,
+    String? observacoes,
+  }) async {
     try {
-      await _repository.marcarComoPago(transacaoId, contaBancariaId: contaBancariaId);
-      emit(state.copyWith(successMessage: 'Conta marcada como paga!'));
+      await _repository.marcarComoPago(
+        transacaoId,
+        contaBancariaId: contaBancariaId,
+        dataPagamento: dataPagamento,
+        valorFinal: valorFinal,
+        comprovante: comprovante,
+        observacoes: observacoes,
+      );
+      emit(state.copyWith(successMessage: 'Obrigação liquidada com sucesso!'));
       await carregarContas();
       return true;
     } catch (e) {

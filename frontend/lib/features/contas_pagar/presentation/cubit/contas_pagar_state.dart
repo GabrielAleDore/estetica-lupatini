@@ -42,6 +42,32 @@ class ContasPagarState extends Equatable {
       .where((c) => c['status'] == 'PAGO')
       .fold(0.0, (acc, c) => acc + ((c['valor_total'] as num?)?.toDouble() ?? 0.0));
 
+  int get quantidadePendentes => contas.where((c) => c['status'] == 'PENDENTE').length;
+
+  int get quantidadePagas => contas.where((c) => c['status'] == 'PAGO').length;
+
+  int get quantidadeVencidas {
+    final hojeStr = DateTime.now().toIso8601String().substring(0, 10);
+    return contas.where((c) {
+      final venc = c['data_vencimento']?.toString() ?? '';
+      return c['status'] == 'PENDENTE' && venc.isNotEmpty && venc.compareTo(hojeStr) < 0;
+    }).length;
+  }
+
+  double get totalPrevisaoProximos7Dias {
+    final hoje = DateTime.now();
+    final hojeStr = hoje.toIso8601String().substring(0, 10);
+    final limite7DiasStr = hoje.add(const Duration(days: 7)).toIso8601String().substring(0, 10);
+
+    return contas.where((c) {
+      final venc = c['data_vencimento']?.toString() ?? '';
+      return c['status'] == 'PENDENTE' &&
+          venc.isNotEmpty &&
+          venc.compareTo(hojeStr) >= 0 &&
+          venc.compareTo(limite7DiasStr) <= 0;
+    }).fold(0.0, (acc, c) => acc + ((c['valor_total'] as num?)?.toDouble() ?? 0.0));
+  }
+
   List<Map<String, dynamic>> get contasFiltradas {
     final hojeStr = DateTime.now().toIso8601String().substring(0, 10);
 

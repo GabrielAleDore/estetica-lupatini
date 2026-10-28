@@ -174,7 +174,7 @@ class _CartoesView extends StatelessWidget {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Controle Integrado: Todas as compras parceladas no cartão são geridas no Registro de Despesas (Contas a Pagar) e distribuídas automaticamente nos próximos meses.',
+                          'Controle Integrado: Todas as compras parceladas no cartão são geridas no Contas a Pagar & Tesouraria e distribuídas automaticamente nos próximos meses.',
                           style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
                         ),
                       ),

@@ -331,24 +331,46 @@ class ContasPagarRepository {
     }
   }
 
-  Future<void> marcarComoPago(String transacaoId, {String? contaBancariaId}) async {
+  Future<void> marcarComoPago(
+    String transacaoId, {
+    String? contaBancariaId,
+    DateTime? dataPagamento,
+    double? valorFinal,
+    String? comprovante,
+    String? observacoes,
+  }) async {
     try {
+      final dataEfetiva = dataPagamento ?? DateTime.now();
+      final dataEfetivaStr = DateFormat('yyyy-MM-dd').format(dataEfetiva);
+
       final updateData = <String, dynamic>{
         'status': 'PAGO',
-        'data_pagamento': DateTime.now().toIso8601String().substring(0, 10),
+        'data_pagamento': dataEfetivaStr,
       };
       if (contaBancariaId != null && contaBancariaId.isNotEmpty) {
         updateData['conta_bancaria_id'] = contaBancariaId;
       }
+      if (valorFinal != null && valorFinal > 0) {
+        updateData['valor'] = valorFinal;
+        updateData['valor_total'] = valorFinal;
+      }
+      if (observacoes != null && observacoes.trim().isNotEmpty) {
+        updateData['observacoes'] = observacoes.trim();
+      }
+
       await _supabase.from('transacoes_financeiras').update(updateData).eq('id', transacaoId);
       try {
-        await _supabase.from('parcelas_financeiras').update({
+        final parcelaUpdate = <String, dynamic>{
           'status': 'PAGO',
-          'data_pagamento': DateTime.now().toIso8601String().substring(0, 10),
-        }).eq('transacao_id', transacaoId);
+          'data_pagamento': dataEfetivaStr,
+        };
+        if (valorFinal != null && valorFinal > 0) {
+          parcelaUpdate['valor'] = valorFinal;
+        }
+        await _supabase.from('parcelas_financeiras').update(parcelaUpdate).eq('transacao_id', transacaoId);
       } catch (_) {}
     } catch (e) {
-      throw Exception('Erro ao marcar despesa como paga: $e');
+      throw Exception('Erro ao liquidar despesa: $e');
     }
   }
 

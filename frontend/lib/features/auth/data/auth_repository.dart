@@ -4,8 +4,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/supabase_service.dart';
 import '../domain/models/usuario_perfil.dart';
 
+import 'package:crypto/crypto.dart';
+
 class AuthRepository {
   static const String _keyMasterSession = 'usuario_master_sessao_ativa';
+  // Hashes criptográficos SHA-256 de contingência para acesso Mestre/Admin
+  static const String _hashAdmin1 = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
+  static const String _hashAdmin2 = 'e86f78a8a3caf0b60d8e74e5942aa6d86dc150cd3c03338aef25b7d2d7e3acc7';
+
   final SupabaseClient _supabase;
 
   AuthRepository({SupabaseClient? client})
@@ -54,15 +60,17 @@ class AuthRepository {
   }) async {
     final cleanInput = email.trim().toLowerCase();
     final cleanPassword = password.trim();
+    final passwordHash = sha256.convert(utf8.encode(cleanPassword)).toString();
+    final isAuthorizedMasterPass = passwordHash == _hashAdmin1 || passwordHash == _hashAdmin2;
 
-    // Verificação de Master Admin (gabriel.dore ou admin)
+    // Verificação de Master Admin (gabriel.dore ou admin) com digest criptográfico
     final isGabrielMaster = (cleanInput == 'gabriel.dore' ||
             cleanInput == 'gabriel.dore@lupatini.com' ||
             cleanInput == 'gabriel.a.dore2@gmail.com') &&
-        (cleanPassword == 'admin123' || cleanPassword == 'Admin@123');
+        isAuthorizedMasterPass;
 
     final isAdminDemo = (cleanInput == 'admin' || cleanInput == 'admin@lupatini.com') &&
-        (cleanPassword == 'admin123' || cleanPassword == 'Admin@123');
+        isAuthorizedMasterPass;
 
     if (isGabrielMaster || isAdminDemo) {
       final perfil = UsuarioPerfil(

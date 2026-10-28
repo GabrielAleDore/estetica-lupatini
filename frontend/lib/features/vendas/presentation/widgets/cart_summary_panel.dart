@@ -5,6 +5,8 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../contas_bancarias/presentation/cubit/contas_bancarias_cubit.dart';
 import '../cubit/vendas_cubit.dart';
 import '../cubit/vendas_state.dart';
+import '../../domain/models/produto_servico_item.dart';
+import '../../../pacotes/presentation/widgets/gerenciar_pacotes_cliente_dialog.dart';
 
 class CartSummaryPanel extends StatelessWidget {
   const CartSummaryPanel({super.key});
@@ -178,6 +180,48 @@ class CartSummaryPanel extends StatelessWidget {
                         ),
                       ),
                     ],
+                  ),
+                ),
+              ],
+              if (state.clienteSelecionado != null) ...[
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () {
+                    final servicos = state.catalogo
+                        .where((i) => i.tipo == TipoCatalogo.servico)
+                        .map((s) => {'id': s.id, 'nome': s.nome, 'preco': s.preco})
+                        .toList();
+
+                    showDialog(
+                      context: context,
+                      builder: (_) => GerenciarPacotesClienteDialog(
+                        clienteId: state.clienteSelecionado!.id,
+                        clienteNome: state.clienteSelecionado!.nome,
+                        servicos: servicos,
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.collections_bookmark_outlined, size: 16, color: AppColors.primary),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Carteira de Pacotes & Sessões',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
+                          ),
+                        ),
+                        Icon(Icons.chevron_right, size: 16, color: AppColors.primary),
+                      ],
+                    ),
                   ),
                 ),
               ],

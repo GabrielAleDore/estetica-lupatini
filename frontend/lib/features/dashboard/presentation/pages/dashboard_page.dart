@@ -126,7 +126,7 @@ class _DashboardView extends StatelessWidget {
 
   void _navegarParaRegistroDespesas(BuildContext context) {
     try {
-      MainNavigationShell.navegarPara('Registro de Despesas');
+      MainNavigationShell.navegarPara('Contas a Pagar & Tesouraria');
     } catch (_) {
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const ContasPagarPage()),
